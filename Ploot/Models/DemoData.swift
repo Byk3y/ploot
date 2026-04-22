@@ -44,26 +44,42 @@ enum DemoData {
     }
 
     private static func seededTasks() -> [PlootTask] {
-        [
-            PlootTask(
-                title: "Reply to the one email I've been avoiding",
-                note: "It's the one from accounting. You know the one.",
-                due: "Today, 2:00 PM",
-                projectId: "work",
-                priority: .urgent,
-                tags: ["deep work"],
-                section: .today
+        let cal = Calendar.current
+        let now = Date()
+        let startOfToday = cal.startOfDay(for: now)
+        let yesterday = cal.date(byAdding: .day, value: -1, to: startOfToday)
+        let todayAt2PM = cal.date(bySettingHour: 14, minute: 0, second: 0, of: startOfToday)
+        let in3Days = cal.date(byAdding: .day, value: 3, to: startOfToday)
+        let in4Days = cal.date(byAdding: .day, value: 4, to: startOfToday)
+        let in5Days = cal.date(byAdding: .day, value: 5, to: startOfToday)
+
+        // Some "done" tasks completed at staggered points over the last 4
+        // days so the weekly chart and streak look alive on first launch.
+        let completedToday = cal.date(bySettingHour: 9, minute: 15, second: 0, of: startOfToday)
+        let completed1DayAgo = cal.date(byAdding: .hour, value: -20, to: now)
+        let completed2DaysAgo = cal.date(byAdding: .day, value: -2, to: now)
+
+        return [
+            taskWithCompletion(
+                PlootTask(
+                    title: "Reply to the one email I've been avoiding",
+                    note: "It's the one from accounting. You know the one.",
+                    dueDate: todayAt2PM,
+                    projectId: "work",
+                    priority: .urgent,
+                    tags: ["deep work"]
+                ),
+                completedAt: nil
             ),
             PlootTask(
                 title: "Buy more oat milk (again)",
-                due: "Today",
+                dueDate: startOfToday,
                 duration: "15 min",
-                projectId: "errands",
-                section: .today
+                projectId: "errands"
             ),
             PlootTask(
                 title: "Outline the Q3 pitch deck",
-                due: "Today",
+                dueDate: startOfToday,
                 duration: "45 min",
                 projectId: "work",
                 priority: .high,
@@ -71,56 +87,65 @@ enum DemoData {
                     Subtask(title: "Problem statement", done: true, order: 0),
                     Subtask(title: "Market data + chart", done: false, order: 1),
                     Subtask(title: "The funny opening slide", done: false, order: 2)
-                ],
-                section: .today
+                ]
             ),
-            PlootTask(
-                title: "Go for a walk (a real one)",
-                due: "Today",
-                projectId: "home",
-                done: true,
-                section: .today
+            taskWithCompletion(
+                PlootTask(
+                    title: "Go for a walk (a real one)",
+                    dueDate: startOfToday,
+                    projectId: "home",
+                    done: true
+                ),
+                completedAt: completedToday
             ),
             PlootTask(
                 title: "Call mom",
-                due: "Yesterday",
+                dueDate: yesterday,
                 projectId: "home",
-                priority: .medium,
-                section: .overdue,
-                overdue: true
+                priority: .medium
             ),
             PlootTask(
                 title: "Water the mysterious plant",
-                due: "Thu",
-                projectId: "home",
-                section: .later
+                dueDate: in3Days,
+                projectId: "home"
             ),
             PlootTask(
                 title: "Ship v2 of the thing",
-                due: "Fri",
+                dueDate: in4Days,
                 projectId: "work",
                 priority: .high,
-                tags: ["sprint"],
-                section: .later
+                tags: ["sprint"]
             ),
             PlootTask(
                 title: "Pretend to understand the new CSS spec",
-                due: "Sat",
-                projectId: "side",
-                section: .later
+                dueDate: in5Days,
+                projectId: "side"
             ),
-            PlootTask(
-                title: "Morning stretch",
-                projectId: "home",
-                done: true,
-                section: .today
+            taskWithCompletion(
+                PlootTask(
+                    title: "Morning stretch",
+                    projectId: "home",
+                    done: true
+                ),
+                completedAt: completed1DayAgo
             ),
-            PlootTask(
-                title: "Review PR #1247",
-                projectId: "work",
-                done: true,
-                section: .today
+            taskWithCompletion(
+                PlootTask(
+                    title: "Review PR #1247",
+                    projectId: "work",
+                    done: true
+                ),
+                completedAt: completed2DaysAgo
             ),
         ]
+    }
+
+    /// Overrides the auto-assigned completedAt (now) on seeded done tasks so
+    /// the streak + weekly chart have plausible history on first launch.
+    private static func taskWithCompletion(_ task: PlootTask, completedAt: Date?) -> PlootTask {
+        if let completedAt {
+            task.completedAt = completedAt
+        }
+        return task
     }
 }

@@ -395,15 +395,12 @@ struct QuickAddSheet: View {
     private func submit() {
         let trimmed = title.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        let dueLabel: String? = {
-            var label = due.label
-            if let time { label += ", \(time)" }
-            return label
-        }()
+        let resolvedDate = due.date(timeSlot: time)
         let task = PlootTask(
             title: trimmed,
             note: note.isEmpty ? nil : note,
-            due: dueLabel,
+            due: nil,  // display label derives from dueDate now
+            dueDate: resolvedDate,
             projectId: projectId == "inbox" ? nil : projectId,
             priority: priority,
             subtasks: subtasks,
@@ -477,6 +474,57 @@ enum DueOption: String, CaseIterable, Identifiable {
         case .nextweek: return "calendar.badge.clock"
         case .someday:  return "infinity"
         }
+    }
+
+    /// Resolve the user's coarse due choice into an absolute `Date`. Time
+    /// slot format matches the sheet's picker strings ("8:00 AM", "2:00 PM",
+    /// etc.). Someday is always nil (dateless).
+    func date(
+        timeSlot: String?,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Date? {
+        let startOfToday = calendar.startOfDay(for: now)
+        let base: Date?
+        switch self {
+        case .today:
+            base = startOfToday
+        case .tomorrow:
+            base = calendar.date(byAdding: .day, value: 1, to: startOfToday)
+        case .weekend:
+            // Next Saturday strictly after today. If today is Saturday, this
+            // lands on today+7 which reads as "this weekend just gone" — fine
+            // for Phase 3b; can refine once a custom date picker lands.
+            base = calendar.nextDate(
+                after: now,
+                matching: DateComponents(weekday: 7),  // Saturday
+                matchingPolicy: .nextTime
+            )
+        case .nextweek:
+            base = calendar.nextDate(
+                after: now,
+                matching: DateComponents(weekday: 2),  // Monday
+                matchingPolicy: .nextTime
+            )
+        case .someday:
+            return nil
+        }
+
+        guard let base else { return nil }
+
+        if let slot = timeSlot, let (hour, minute) = Self.parseTimeSlot(slot) {
+            return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base)
+        }
+        return base
+    }
+
+    private static func parseTimeSlot(_ slot: String) -> (Int, Int)? {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "h:mm a"
+        guard let date = fmt.date(from: slot) else { return nil }
+        let cal = Calendar(identifier: .gregorian)
+        return (cal.component(.hour, from: date), cal.component(.minute, from: date))
     }
 }
 
