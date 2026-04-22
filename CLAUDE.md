@@ -113,9 +113,33 @@ Every interactive element gets `.sensoryFeedback` — not optional. Use `.select
 
 ## Models + state
 
-- `TaskStore` is `@Observable` (iOS 17 macro, not `ObservableObject`). Views hold it via `@Bindable var store: TaskStore`.
-- Pass the store down as a parameter, not via `@EnvironmentObject`. Screens are explicitly typed on what they need.
-- No persistence yet — seed data in `DemoData.swift`. TODO: SwiftData when that lands.
+- `TaskStore` was removed in Phase 3a — views use `@Query` directly. `@Observable` remains the right macro when we need local view-state holders; don't reach for `ObservableObject`.
+- Pass SwiftData mutations via `@Environment(\.modelContext)`. Queries use `@Query`, optionally with sort descriptors.
+- Seed data in `DemoData.seedIfNeeded(context:)` — idempotent, only inserts when both tasks and projects tables are empty.
+
+### Adding fields to an existing @Model — use Optional
+
+SwiftData's automatic lightweight migration refuses to load an on-device store if a new *non-optional* column has no value for existing rows. The crash looks like:
+
+```
+NSCocoaErrorDomain 134110 — missing attribute values on mandatory destination attribute
+```
+
+Default to `Optional` types for every new field on an existing model:
+
+```swift
+// Wrong — crashes on the first on-device launch that has the old schema.
+var updatedAt: Date
+
+// Right — nil is a valid value for rows that predate the column.
+var updatedAt: Date?
+```
+
+Set the field to its default (`Date()` etc.) in the `init` so fresh rows still get values. Treat nil as "never set since the column arrived" at read time.
+
+If the field truly must be non-optional, ship an explicit `SchemaMigrationPlan` with a `.lightweight` or `.custom` stage that supplies a default.
+
+During rapid iteration, "delete + reinstall" is a valid dev workflow when you've already shipped a non-optional field. Once real users exist, every schema change needs a migration plan.
 
 ## Supabase MCP access
 
