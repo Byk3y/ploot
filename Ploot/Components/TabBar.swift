@@ -13,12 +13,14 @@ enum PlootTab: String, CaseIterable, Hashable {
     }
 
     /// SF Symbols picked to match the Lucide icons the web kit uses.
-    var icon: String {
+    /// Returns (outlined, filled) — some symbols (calendar) have no `.fill`
+    /// variant, so we fall back to a filled analogue by name.
+    var icon: (inactive: String, active: String) {
         switch self {
-        case .today:    return "sun.max"
-        case .projects: return "folder"
-        case .calendar: return "calendar"
-        case .done:     return "checkmark.circle"
+        case .today:    return ("sun.max", "sun.max.fill")
+        case .projects: return ("folder", "folder.fill")
+        case .calendar: return ("calendar", "calendar.circle.fill")
+        case .done:     return ("checkmark.circle", "checkmark.circle.fill")
         }
     }
 }
@@ -41,7 +43,7 @@ struct TabBar: View {
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.top, Spacing.s2)
-        .padding(.bottom, Spacing.s6)
+        .padding(.bottom, Spacing.s1)
         .background(palette.bgElevated)
         .overlay(alignment: .top) {
             Rectangle()
@@ -61,7 +63,7 @@ private struct TabItem: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 2) {
-                Image(systemName: active ? "\(tab.icon).fill" : tab.icon)
+                Image(systemName: active ? tab.icon.active : tab.icon.inactive)
                     .font(.system(size: 22, weight: active ? .bold : .medium))
                     .scaleEffect(active ? 1.1 : 1.0)
                     .offset(y: active ? -1 : 0)

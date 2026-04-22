@@ -20,7 +20,7 @@ struct HomeView: View {
 
                 FAB(action: { quickAddOpen = true })
                     .padding(.trailing, 20)
-                    .padding(.bottom, 92)
+                    .padding(.bottom, 24)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
             .background(palette.bg.ignoresSafeArea())
