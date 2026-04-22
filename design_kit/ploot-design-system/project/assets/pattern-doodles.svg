@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  
+  <defs>
+    <pattern id="doodles" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+      
+      <path d="M10 40 L16 46 L28 32" stroke="#1a1410" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+      
+      <circle cx="58" cy="20" r="3" fill="#ff6b35"></circle>
+      
+      <path d="M48 56 Q55 50 62 56 T76 56" stroke="#2d7a4e" stroke-width="2" fill="none" stroke-linecap="round"></path>
+      
+      <g stroke="#b8357a" stroke-width="2" stroke-linecap="round">
+        <path d="M20 68 L20 74 M17 71 L23 71"></path>
+      </g>
+      
+      <path d="M68 68 L70 74 L76 74 L71 78 L73 84 L68 80 L63 84 L65 78 L60 74 L66 74 Z" fill="#f5b800" stroke="#1a1410" stroke-width="1"></path>
+    </pattern>
+  </defs>
+  <rect width="400" height="400" fill="#fff4c9"></rect>
+  <rect width="400" height="400" fill="url(#doodles)"></rect>
+</svg>

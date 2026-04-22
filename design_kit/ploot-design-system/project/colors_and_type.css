@@ -1,0 +1,261 @@
+/* =========================================================================
+   PLOOT DESIGN SYSTEM — Colors & Type
+   A playful, warm task manager. Clay-orange primary on cream, with bold
+   dark mono. Serif display + geometric sans + mono accent.
+   ========================================================================= */
+
+/* ---------- Fonts ---------- */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('fonts/Fraunces-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('fonts/Geist-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/JetBrainsMono-Variable.woff2') format('woff2-variations');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Design tokens (Light) ---------- */
+:root {
+  /* Brand — clay/terracotta family */
+  --ploot-clay-50:  #fff5ed;
+  --ploot-clay-100: #ffe5d1;
+  --ploot-clay-200: #ffc9a6;
+  --ploot-clay-300: #ffa06f;
+  --ploot-clay-400: #ff7a3d;
+  --ploot-clay-500: #ff6b35;  /* primary */
+  --ploot-clay-600: #e8541f;
+  --ploot-clay-700: #b83d14;
+  --ploot-clay-800: #8a2d0f;
+  --ploot-clay-900: #4a1807;
+
+  /* Ink — warm near-blacks & grays */
+  --ploot-ink-50:  #faf8f5;
+  --ploot-ink-100: #f2ede5;
+  --ploot-ink-200: #e4ddd0;
+  --ploot-ink-300: #c9bfae;
+  --ploot-ink-400: #8a8070;
+  --ploot-ink-500: #5b5245;
+  --ploot-ink-600: #3d3528;
+  --ploot-ink-700: #2a2118;
+  --ploot-ink-800: #1a1410;
+  --ploot-ink-900: #0d0906;
+
+  /* Accent — forest green (for done/success, complementary to clay) */
+  --ploot-forest-100: #d8e8dd;
+  --ploot-forest-500: #2d7a4e;
+  --ploot-forest-700: #1a5233;
+
+  /* Accent — butter yellow (highlights, stars, joy) */
+  --ploot-butter-100: #fff4c9;
+  --ploot-butter-300: #ffd952;
+  --ploot-butter-500: #f5b800;
+
+  /* Accent — plum (priority high, sparingly) */
+  --ploot-plum-100: #f3d9e8;
+  --ploot-plum-500: #b8357a;
+
+  /* Accent — sky (links, info) */
+  --ploot-sky-100: #d6e9f5;
+  --ploot-sky-500: #3c8bc7;
+
+  /* Semantic surfaces & foregrounds */
+  --bg:            var(--ploot-ink-50);     /* app background — warm cream */
+  --bg-elevated:   #ffffff;                 /* cards */
+  --bg-sunken:     var(--ploot-ink-100);    /* input wells, rails */
+  --bg-inverse:    var(--ploot-ink-800);
+
+  --fg1:           var(--ploot-ink-800);    /* primary text */
+  --fg2:           var(--ploot-ink-600);    /* secondary text */
+  --fg3:           var(--ploot-ink-400);    /* muted/caption */
+  --fg-inverse:    var(--ploot-ink-50);
+  --fg-brand:      var(--ploot-clay-600);
+
+  --border:        var(--ploot-ink-200);
+  --border-strong: var(--ploot-ink-300);
+  --border-ink:    var(--ploot-ink-800);    /* the signature dark hairline */
+
+  --primary:       var(--ploot-clay-500);
+  --primary-hover: var(--ploot-clay-600);
+  --primary-press: var(--ploot-clay-700);
+  --on-primary:    #ffffff;
+
+  --success:       var(--ploot-forest-500);
+  --warning:       var(--ploot-butter-500);
+  --danger:        var(--ploot-plum-500);
+  --info:          var(--ploot-sky-500);
+
+  /* Shadows — warm, soft, offset down-right. */
+  --shadow-xs:    0 1px 2px rgba(26, 20, 16, 0.05);
+  --shadow-sm:    0 2px 6px rgba(26, 20, 16, 0.06), 0 1px 2px rgba(26, 20, 16, 0.04);
+  --shadow-md:    0 6px 16px rgba(26, 20, 16, 0.08), 0 2px 4px rgba(26, 20, 16, 0.04);
+  --shadow-lg:    0 16px 36px rgba(26, 20, 16, 0.12), 0 4px 8px rgba(26, 20, 16, 0.06);
+  --shadow-pop:   0 2px 0 var(--ploot-ink-800); /* signature: hard-stamped bottom edge, like a stamp */
+  --shadow-pop-lg:0 4px 0 var(--ploot-ink-800);
+
+  /* Radii — rounded, friendly */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-full: 9999px;
+
+  /* Spacing — 4px base */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Motion — springy, playful */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:    140ms;
+  --dur-base:    220ms;
+  --dur-slow:    380ms;
+
+  /* Type */
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-sans:    'Geist', -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+}
+
+/* ---------- Cocoa (low-light) ----------
+   Ploot's low-light mode isn't black — it's cocoa.
+   A warm chocolate background that keeps the brand's personality
+   after sundown. [data-theme="dark"] is kept as an alias fallback.
+*/
+
+[data-theme="cocoa"], [data-theme="dark"] {
+  --bg:            #3a2a20;   /* warm chocolate */
+  --bg-elevated:   #4a3626;   /* a shade up */
+  --bg-sunken:     #2e2018;   /* a shade down */
+  --bg-inverse:    var(--ploot-ink-50);
+
+  --fg1:           #fbf1e2;   /* cream */
+  --fg2:           #d9c9b3;   /* milky */
+  --fg3:           #9d8972;   /* muted */
+  --fg-inverse:    var(--ploot-ink-800);
+  --fg-brand:      var(--ploot-clay-300);
+
+  --border:        #5c4532;
+  --border-strong: #78593f;
+  --border-ink:    #1a1008;   /* the hairline stays dark — it's the stamp */
+
+  --primary:       var(--ploot-clay-400);
+  --primary-hover: var(--ploot-clay-300);
+  --primary-press: var(--ploot-clay-500);
+
+  --shadow-xs:    0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm:    0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md:    0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg:    0 16px 36px rgba(0, 0, 0, 0.5);
+  --shadow-pop:   0 2px 0 var(--border-ink);
+  --shadow-pop-lg:0 4px 0 var(--border-ink);
+}
+
+/* ---------- Semantic type scale ---------- */
+:where(body) {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg1);
+  background: var(--bg);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+.t-display {
+  font-family: var(--font-display);
+  font-size: 56px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  font-variation-settings: "SOFT" 50, "opsz" 144;
+}
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  font-weight: 500;
+  font-variation-settings: "SOFT" 40, "opsz" 100;
+}
+.t-h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+.t-h3 {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.t-title {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.t-body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.t-body-sm {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.t-caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--fg3);
+}
+.t-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg2);
+}
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+.t-serif-italic {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "SOFT" 100;
+}

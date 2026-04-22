@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:24px;background:var(--bg);display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.item{display:flex;flex-direction:column;align-items:center;gap:8px}
+.box{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;border:2.5px solid var(--border-strong)}
+.box.chk{background:var(--success);border-color:var(--success)}
+.box.urgent{border-color:var(--primary)}
+.box.med{border-color:var(--ploot-butter-500)}
+.box.high{border-color:var(--ploot-plum-500)}
+.label{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--fg2)}
+svg{display:block}
+</style></head><body>
+<div class="item"><div class="box"></div><div class="label">empty</div></div>
+<div class="item"><div class="box chk"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M5 12 L10 17 L19 7" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div><div class="label">done</div></div>
+<div class="item"><div class="box urgent"></div><div class="label">urgent</div></div>
+<div class="item"><div class="box high"></div><div class="label">high</div></div>
+<div class="item"><div class="box med"></div><div class="label">medium</div></div>
+</body></html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ploot — Mobile UI Kit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../colors_and_type.css?v=4">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  html, body {
+    margin: 0; min-height: 100vh;
+    background: var(--ploot-ink-100);
+    font-family: var(--font-sans);
+    color: var(--fg1);
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(255, 107, 53, 0.08) 0%, transparent 45%),
+      radial-gradient(circle at 80% 90%, rgba(245, 184, 0, 0.08) 0%, transparent 40%);
+  }
+  .page {
+    padding: 48px 24px 80px;
+    max-width: 1440px; margin: 0 auto;
+  }
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+  }
+  .kit-title {
+    font-family: var(--font-display);
+    font-size: 44px; font-weight: 600; letter-spacing: -0.02em;
+    margin: 0;
+    font-variation-settings: "SOFT" 60, "opsz" 100;
+  }
+  .kit-sub {
+    font-family: var(--font-display); font-style: italic; color: var(--fg3);
+    font-size: 22px; margin-left: 8px;
+    font-variation-settings: "SOFT" 100;
+  }
+  .kit-caption {
+    color: var(--fg2); font-size: 15px; max-width: 640px; line-height: 1.55;
+    margin: 0 0 40px;
+  }
+
+  .section-label {
+    display: flex; align-items: baseline; gap: 16px;
+    margin: 56px 0 4px;
+    padding-bottom: 12px;
+    border-bottom: 1.5px solid var(--border);
+  }
+  .section-label .num {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    color: var(--fg3); letter-spacing: 0.08em;
+    padding: 4px 10px;
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-ink);
+    border-radius: var(--r-full);
+    box-shadow: 0 1px 0 var(--border-ink);
+  }
+  .section-label .name {
+    font-family: var(--font-display); font-size: 28px; font-weight: 500;
+    letter-spacing: -0.015em; color: var(--fg1);
+    font-variation-settings: "SOFT" 60;
+  }
+  .section-label .hint {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 17px; color: var(--fg3);
+    font-variation-settings: "SOFT" 100;
+  }
+
+  .section-desc {
+    font-family: var(--font-sans); font-size: 14px; color: var(--fg2);
+    margin: 8px 0 28px;
+    max-width: 680px; line-height: 1.55;
+  }
+
+  .grid {
+    display: grid; gap: 32px;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    justify-items: center;
+  }
+  .frame-card {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .frame-label {
+    font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+    color: var(--fg2);
+    display: flex; align-items: center; gap: 8px;
+    text-align: center;
+  }
+  .frame-label .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--primary);
+    border: 1.5px solid var(--border-ink); flex-shrink: 0;
+  }
+  .frame-label .dot.dark { background: #2a2118; }
+
+  /* animations */
+  @keyframes ploot-check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+  @keyframes ploot-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  @keyframes ploot-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ploot-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="header">
+    <img src="../../assets/logo-mark.svg" width="36" height="36" alt="Ploot"/>
+    <h1 class="kit-title">Ploot mobile</h1>
+    <span class="kit-sub">— the interactive kit</span>
+  </div>
+  <p class="kit-caption">
+    Four sections: onboarding, core app screens, empty states, and settings (with dark mode). Tap anything. Check a task off. Swap tabs. Toggle the theme. Everything is live.
+  </p>
+
+  <div id="demo-root"></div>
+</div>
+
+<script type="text/babel" src="Primitives.jsx?v=2"></script>
+<script type="text/babel" src="Composites.jsx?v=2"></script>
+<script type="text/babel" src="Screens.jsx?v=2"></script>
+<script type="text/babel" src="Settings.jsx?v=2"></script>
+<script type="text/babel" src="Onboarding.jsx?v=2"></script>
+<script type="text/babel" src="ios-frame.jsx?v=2"></script>
+<script type="text/babel" src="App.jsx?v=2"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ─────────────────────────────────────────────────────────────
+// Themed wrapper — scopes CSS theme to one device
+//   theme: 'light' | 'cocoa' | 'oil-lamp' | 'dusk'
+// ─────────────────────────────────────────────────────────────
+function ThemedDevice({ theme = 'light', width = 380, height = 820, children }) {
+  const dim = theme !== 'light';
+  return (
+    <div data-theme={theme} style={{ display: 'contents' }}>
+      <IOSDevice width={width} height={height} dark={dim}>
+        <div data-theme={theme} style={{
+          height: '100%', background: 'var(--bg)', color: 'var(--fg1)',
+        }}>
+          {children}
+        </div>
+      </IOSDevice>
+    </div>
+  );
+}
+
+function DeviceCard({ label, sublabel, theme = 'light', children }) {
+  const dim = theme !== 'light';
+  return (
+    <div className="frame-card">
+      <ThemedDevice theme={theme}>
+        {children}
+      </ThemedDevice>
+      <div className="frame-label">
+        <span className={"dot" + (dim ? " dark" : "")}/> {label}
+        {sublabel && <span style={{ color: 'var(--fg3)', fontWeight: 400, fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>· {sublabel}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ num, name, hint, desc }) {
+  return (
+    <>
+      <div className="section-label">
+        <span className="num">{num}</span>
+        <span className="name">{name}</span>
+        {hint && <span className="hint">— {hint}</span>}
+      </div>
+      {desc && <p className="section-desc">{desc}</p>}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Live Ploot app with dark toggle — used for Settings demo
+// ─────────────────────────────────────────────────────────────
+function LivePlootApp({ initialTab = 'today', initialTheme = 'light' }) {
+  const [theme, setTheme] = useState(initialTheme);
+  const [tab, setTab] = useState(initialTab);
+  const [tasks, setTasks] = useState(window.initialTasks);
+  const [openTask, setOpenTask] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(initialTab === 'settings');
+
+  function toggle(id, val) {
+    setTasks(ts => ts.map(t => t.id === id ? { ...t, done: val } : t));
+  }
+  function addTask({ title, project, priority, due }) {
+    setTasks(ts => [{ id: Date.now(), title, project, priority, due, done: false, section: 'today' }, ...ts]);
+  }
+
+  let content;
+  if (showSettings) content = <SettingsScreen theme={theme} setTheme={setTheme} onBack={() => setShowSettings(false)} />;
+  else if (openTask) content = <TaskDetailScreen task={tasks.find(t => t.id === openTask.id)} onBack={() => setOpenTask(null)} onToggle={toggle} />;
+  else if (tab === 'today') content = <TodayScreen tasks={tasks} onToggle={toggle} onOpen={setOpenTask} />;
+  else if (tab === 'projects') content = <ProjectsScreen projects={window.projects} />;
+  else if (tab === 'calendar') content = <CalendarScreen tasks={tasks} />;
+  else if (tab === 'done') content = <DoneScreen tasks={tasks} />;
+
+  return (
+    <div data-theme={theme} style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: 'var(--bg)', position: 'relative', overflow: 'hidden', color: 'var(--fg1)',
+    }}>
+      <div style={{ height: 54, flexShrink: 0 }}/>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        {content}
+        {!openTask && !showSettings && <FAB onClick={() => setAddOpen(true)} />}
+        {addOpen && <QuickAddSheet onClose={() => setAddOpen(false)} onAdd={addTask} />}
+      </div>
+      {!openTask && !showSettings && <TabBar current={tab} onChange={setTab} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Demo root
+// ─────────────────────────────────────────────────────────────
+function Demo() {
+  useEffect(() => {
+    // Render lucide icons once everything is mounted
+    const t = setTimeout(() => {
+      if (window.lucide) window.lucide.createIcons();
+    }, 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <>
+      {/* ═══════════════════════ ONBOARDING ═══════════════════════ */}
+      <SectionLabel
+        num="01"
+        name="Onboarding"
+        hint="the handshake"
+        desc="Four screens. We introduce Ploot, get the user's name, put one thing on the list to make the app feel alive, and ask (politely) about notifications."
+      />
+      <div className="grid">
+        <DeviceCard label="Welcome" sublabel="meet Ploot">
+          <OnboardingFlow initialStep={0} />
+        </DeviceCard>
+        <DeviceCard label="Name + goal" sublabel="what's on your mind">
+          <OnboardingFlow initialStep={1} />
+        </DeviceCard>
+        <DeviceCard label="First task" sublabel="the scientific click">
+          <OnboardingFlow initialStep={2} />
+        </DeviceCard>
+        <DeviceCard label="Notifications" sublabel="no guilt trips">
+          <OnboardingFlow initialStep={3} />
+        </DeviceCard>
+      </div>
+
+      {/* ═══════════════════════ CORE APP ═══════════════════════ */}
+      <SectionLabel
+        num="02"
+        name="The app"
+        hint="where the work happens"
+        desc="Five tabs: Today, Projects, Calendar, Done — plus the floating ＋ that opens the full task composer. Tap any row to open detail. Toggle tabs. Everything state-live."
+      />
+      <div className="grid">
+        <DeviceCard label="Today" sublabel="the home view">
+          <PlootApp initialTab="today" />
+        </DeviceCard>
+        <DeviceCard label="New task" sublabel="the creation flow">
+          <PlootApp initialTab="today" initialAddOpen={true} />
+        </DeviceCard>
+        <DeviceCard label="Projects" sublabel="where plans live">
+          <PlootApp initialTab="projects" />
+        </DeviceCard>
+        <DeviceCard label="Calendar" sublabel="plan your week">
+          <PlootApp initialTab="calendar" />
+        </DeviceCard>
+        <DeviceCard label="Done" sublabel="the streak page">
+          <PlootApp initialTab="done" />
+        </DeviceCard>
+      </div>
+
+      {/* ═══════════════════════ EMPTY STATES ═══════════════════════ */}
+      <SectionLabel
+        num="03"
+        name="Empty states"
+        hint="zero is a feature"
+        desc="Every tab has a beginning. These are the views a brand-new user sees — big illustrations, playful copy, and a clear single action."
+      />
+      <div className="grid">
+        <DeviceCard label="Today" sublabel="inbox zero, lovingly">
+          <div style={{
+            height: '100%', display: 'flex', flexDirection: 'column',
+            background: 'var(--bg)', position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ height: 54, flexShrink: 0 }}/>
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+              <TodayEmpty name="Lena" />
+              <FAB onClick={() => {}} />
+            </div>
+            <TabBar current="today" onChange={() => {}} />
+          </div>
+        </DeviceCard>
+        <DeviceCard label="Projects" sublabel="no folders yet">
+          <div style={{
+            height: '100%', display: 'flex', flexDirection: 'column',
+            background: 'var(--bg)', position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ height: 54, flexShrink: 0 }}/>
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+              <ProjectsEmpty />
+              <FAB onClick={() => {}} />
+            </div>
+            <TabBar current="projects" onChange={() => {}} />
+          </div>
+        </DeviceCard>
+        <DeviceCard label="Calendar" sublabel="a clear week">
+          <div style={{
+            height: '100%', display: 'flex', flexDirection: 'column',
+            background: 'var(--bg)', position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ height: 54, flexShrink: 0 }}/>
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+              <CalendarEmpty />
+              <FAB onClick={() => {}} />
+            </div>
+            <TabBar current="calendar" onChange={() => {}} />
+          </div>
+        </DeviceCard>
+        <DeviceCard label="Done" sublabel="streak starts here">
+          <div style={{
+            height: '100%', display: 'flex', flexDirection: 'column',
+            background: 'var(--bg)', position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ height: 54, flexShrink: 0 }}/>
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+              <DoneEmpty name="Lena" />
+              <FAB onClick={() => {}} />
+            </div>
+            <TabBar current="done" onChange={() => {}} />
+          </div>
+        </DeviceCard>
+      </div>
+
+      {/* ═══════════════════════ SETTINGS + COCOA MODE ═══════════════════════ */}
+      <SectionLabel
+        num="04"
+        name="Settings &amp; cocoa mode"
+        hint="clay on chocolate after sundown"
+        desc="Ploot's low-light mode isn't black — it's cocoa. A warm chocolate background that keeps the brand's personality after sundown. Every screen renders on both themes; toggle tabs in any device to explore."
+      />
+      <div className="grid">
+        <DeviceCard label="Settings" sublabel="light — the cream canvas">
+          <LivePlootApp initialTab="settings" initialTheme="light" />
+        </DeviceCard>
+        <DeviceCard label="Settings · cocoa" sublabel="clay on chocolate" theme="cocoa">
+          <LivePlootApp initialTab="settings" initialTheme="cocoa" />
+        </DeviceCard>
+        <DeviceCard label="Today · cocoa" sublabel="warm list, warm mood" theme="cocoa">
+          <LivePlootApp initialTab="today" initialTheme="cocoa" />
+        </DeviceCard>
+        <DeviceCard label="Done · cocoa" sublabel="the streak, glowing" theme="cocoa">
+          <LivePlootApp initialTab="done" initialTheme="cocoa" />
+        </DeviceCard>
+      </div>
+
+      <div style={{
+        marginTop: 80, textAlign: 'center',
+        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+        fontSize: 16, color: 'var(--fg3)',
+        fontVariationSettings: '"SOFT" 100',
+      }}>
+        — end of the kit. you are, technically, done. —
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('demo-root')).render(<Demo />);
+</script>
+
+</body>
+</html>

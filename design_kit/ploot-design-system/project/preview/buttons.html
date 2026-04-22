@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:24px;background:var(--bg);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;height:44px;font-family:var(--font-sans);font-size:15px;font-weight:600;border-radius:14px;cursor:pointer;letter-spacing:-0.005em;box-sizing:border-box}
+.primary{background:var(--primary);color:var(--on-primary);border:2px solid var(--border-ink);box-shadow:var(--shadow-pop)}
+.secondary{background:#fff;color:var(--fg1);border:2px solid var(--border-ink);box-shadow:var(--shadow-pop)}
+.ghost{background:transparent;color:var(--fg1);border:2px solid transparent}
+.danger{background:var(--danger);color:#fff;border:2px solid var(--border-ink);box-shadow:var(--shadow-pop)}
+.sm{height:32px;padding:6px 12px;font-size:13px;border-radius:10px}
+</style></head><body>
+<button class="btn primary">Add task</button>
+<button class="btn secondary">Skip</button>
+<button class="btn danger">Delete</button>
+<button class="btn ghost">Cancel</button>
+<button class="btn primary sm">Small</button>
+</body></html>
