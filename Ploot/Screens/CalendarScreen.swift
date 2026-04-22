@@ -5,6 +5,7 @@ struct CalendarScreen: View {
 
     @State private var selected: Date = Date()
     @Environment(\.plootPalette) private var palette
+    @Environment(\.plootTheme) private var theme
 
     private var days: [Date] {
         let cal = Calendar.current
@@ -15,7 +16,7 @@ struct CalendarScreen: View {
     }
 
     private let timeSlots: [String] = ["8 AM", "10 AM", "12 PM", "2 PM", "4 PM"]
-    private let slotColors: [ProjectTileColor] = [.primary, .forest, .butter, .sky, .plum]
+    private let slotTints: [CalendarSlotTint] = [.clay, .forest, .butter, .sky, .plum]
 
     var body: some View {
         ScreenFrame(
@@ -83,19 +84,52 @@ struct CalendarScreen: View {
     }
 
     private func timelineCard(task: PlootTask, colorIdx: Int) -> some View {
-        let tint = slotColors[colorIdx % slotColors.count]
-        let tintColor = tint.fill(palette: palette).opacity(palette.ink50 == .white ? 0.22 : 0.28)
+        let tint = slotTints[colorIdx % slotTints.count]
         return VStack(alignment: .leading, spacing: 2) {
             Text(task.title)
                 .font(.geist(size: 14, weight: 600))
-                .foregroundStyle(palette.fg1)
+                .foregroundStyle(tint.foreground(palette: palette, theme: theme))
                 .lineLimit(1)
             Text(task.duration ?? "30 min")
                 .font(.geist(size: 12, weight: 400))
-                .foregroundStyle(palette.fg2)
+                .foregroundStyle(tint.foreground(palette: palette, theme: theme).opacity(0.75))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle(radius: Radius.md, padding: 10, fill: tintColor)
+        .cardStyle(radius: Radius.md, padding: 10, fill: tint.fill(palette: palette, theme: theme))
+    }
+}
+
+/// Legible calendar card tints. On light we lean on the prebuilt `-100`
+/// pastels; on cocoa we blend a darker version of the accent with the
+/// elevated surface so the block still reads as colored without the text
+/// dropping below AA contrast.
+enum CalendarSlotTint {
+    case clay, forest, butter, sky, plum
+
+    func fill(palette: PlootPalette, theme: PlootTheme) -> Color {
+        switch (self, theme) {
+        case (.clay, .light):   return palette.clay100
+        case (.forest, .light): return palette.forest100
+        case (.butter, .light): return palette.butter100
+        case (.sky, .light):    return palette.sky100
+        case (.plum, .light):   return palette.plum100
+        case (.clay, .cocoa):   return palette.clay500.opacity(0.22)
+        case (.forest, .cocoa): return palette.forest500.opacity(0.28)
+        case (.butter, .cocoa): return palette.butter500.opacity(0.22)
+        case (.sky, .cocoa):    return palette.sky500.opacity(0.28)
+        case (.plum, .cocoa):   return palette.plum500.opacity(0.28)
+        }
+    }
+
+    func foreground(palette: PlootPalette, theme: PlootTheme) -> Color {
+        switch (self, theme) {
+        case (_, .light):       return palette.ink800
+        case (.clay, .cocoa):   return palette.clay100
+        case (.forest, .cocoa): return palette.forest100
+        case (.butter, .cocoa): return palette.butter100
+        case (.sky, .cocoa):    return palette.sky100
+        case (.plum, .cocoa):   return palette.plum100
+        }
     }
 }
 
