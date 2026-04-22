@@ -8,6 +8,7 @@ struct TodayScreen: View {
     @Query(sort: \PlootTask.createdAt, order: .reverse) private var allTasks: [PlootTask]
     @Query(sort: \PlootProject.order) private var projects: [PlootProject]
 
+    @AppStorage("displayName") private var displayName: String = "You"
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
 
@@ -48,7 +49,7 @@ struct TodayScreen: View {
 
     private var trailingAvatar: some View {
         Button(action: onOpenSettings) {
-            Text("LM")
+            Text(TaskHelpers.avatarInitials(for: displayName))
                 .font(.geist(size: 13, weight: 700))
                 .foregroundStyle(palette.ink800)
                 .frame(width: 40, height: 40)

@@ -155,6 +155,20 @@ enum TaskHelpers {
         }
     }
 
+    // MARK: - Avatar initials
+
+    /// Two-letter uppercase initials for an avatar tile. "Francis Chukwuma"
+    /// → "FC", "You" → "Y", "" → "?". Reads from the user's display name
+    /// (stored in @AppStorage("displayName")) so Today and Settings show
+    /// the same pill.
+    static func avatarInitials(for displayName: String) -> String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "?" }
+        let parts = trimmed.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first.map(String.init) }
+        return letters.joined().uppercased()
+    }
+
     // MARK: - Today subtitle
 
     static func todaySubtitle(from tasks: [PlootTask], asOf now: Date = Date()) -> String {
