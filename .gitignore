@@ -38,6 +38,10 @@ Carthage/Build/
 .env
 *.mobileprovision
 
+# MCP server config — contains Supabase personal access token + project ref,
+# must never be committed. Each developer keeps their own .mcp.json locally.
+.mcp.json
+
 # Repo-specific — leave design kit in place as reference
 # but drop any temp extraction artifacts:
 design_kit.gz
