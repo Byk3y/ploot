@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct HomeView: View {
+    @Bindable var session: SessionManager
+
     @State private var tab: PlootTab = .today
     @State private var quickAddOpen: Bool = false
     @State private var openSettings: Bool = false
@@ -47,7 +49,7 @@ struct HomeView: View {
                         .plootTheme(theme)
                 }
                 .navigationDestination(isPresented: $openSettings) {
-                    SettingsScreen(theme: $theme)
+                    SettingsScreen(theme: $theme, session: session)
                         .navigationBarBackButtonHidden()
                         .toolbar(.hidden, for: .navigationBar)
                         .plootTheme(theme)

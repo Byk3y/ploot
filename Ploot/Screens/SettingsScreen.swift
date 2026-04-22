@@ -7,6 +7,7 @@ import UserNotifications
 /// each section has room to grow into detail panels later.
 struct SettingsScreen: View {
     @Binding var theme: PlootTheme
+    @Bindable var session: SessionManager
 
     @Query private var allTasks: [PlootTask]
     @Query private var allProjects: [PlootProject]
@@ -15,6 +16,8 @@ struct SettingsScreen: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showingTestScreen: Bool = false
     @State private var confirmingWipe: Bool = false
+    @State private var confirmingSignOut: Bool = false
+    @State private var nameSyncTask: Task<Void, Never>? = nil
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +38,7 @@ struct SettingsScreen: View {
                     section("Data") { dataRows }
                     section("About") { aboutRows }
                     section("Developer") { developerRow }
+                    section("Account") { accountRow }
                     Color.clear.frame(height: 40)
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -56,6 +60,52 @@ struct SettingsScreen: View {
         } message: {
             Text("Every task, project, and subtask is gone. This can't be undone.")
         }
+        .alert("Sign out?", isPresented: $confirmingSignOut) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sign out", role: .destructive) {
+                Task { await session.signOut() }
+            }
+        } message: {
+            Text("You'll need to sign back in with Apple next time. Your data stays put.")
+        }
+    }
+
+    // MARK: - Account
+
+    private var accountRow: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Signed in")
+                        .font(.geist(size: 15, weight: 500))
+                        .foregroundStyle(palette.fg1)
+                    Text(session.currentUser?.email ?? "—")
+                        .font(.geist(size: 12, weight: 400))
+                        .foregroundStyle(palette.fg3)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s3)
+
+            rowDivider
+
+            Button(action: { confirmingSignOut = true }) {
+                HStack {
+                    Text("Sign out")
+                        .font(.geist(size: 15, weight: 500))
+                        .foregroundStyle(palette.danger)
+                    Spacer()
+                    Image(systemName: "arrow.right.square")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(palette.danger)
+                }
+                .padding(.horizontal, Spacing.s4)
+                .padding(.vertical, Spacing.s3)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Profile
@@ -76,6 +126,17 @@ struct SettingsScreen: View {
                     .foregroundStyle(palette.fg1)
                     .submitLabel(.done)
                     .autocorrectionDisabled()
+                    .onChange(of: displayName) { _, newValue in
+                        // Debounce remote push so we don't hammer Supabase
+                        // on every keystroke. 500ms after the user stops
+                        // typing, the change flushes up.
+                        nameSyncTask?.cancel()
+                        nameSyncTask = Task {
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard !Task.isCancelled else { return }
+                            await session.updateRemoteDisplayName(newValue)
+                        }
+                    }
                 Text("the initials show up on your Today avatar")
                     .font(.geist(size: 12, weight: 400))
                     .foregroundStyle(palette.fg3)

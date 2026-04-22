@@ -5,6 +5,7 @@ import UserNotifications
 @main
 struct PlootApp: App {
     private let modelContainer: ModelContainer
+    @State private var session = SessionManager()
 
     init() {
         PlootFonts.register()
@@ -29,8 +30,40 @@ struct PlootApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView(session: session)
         }
         .modelContainer(modelContainer)
+    }
+}
+
+/// Top-level auth gate. While the SDK restores the Keychain session on
+/// launch we show a brief cream splash; once the state settles we route
+/// into AuthView or HomeView.
+private struct RootView: View {
+    @Bindable var session: SessionManager
+    @Environment(\.plootPalette) private var palette
+
+    var body: some View {
+        Group {
+            switch session.state {
+            case .loading:
+                splash
+            case .signedOut:
+                AuthView(session: session)
+                    .transition(.opacity)
+            case .signedIn:
+                HomeView(session: session)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.spring, value: session.state)
+    }
+
+    private var splash: some View {
+        ZStack {
+            palette.bg.ignoresSafeArea()
+            Text("🧡")
+                .font(.system(size: 72))
+        }
     }
 }
