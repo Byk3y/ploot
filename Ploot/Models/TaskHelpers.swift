@@ -36,11 +36,16 @@ enum TaskHelpers {
         from tasks: [PlootTask],
         asOf now: Date = Date()
     ) -> [PlootTask] {
-        tasks.filter { derivedSection(for: $0, asOf: now) == section }
+        tasks.filter { $0.isLive && derivedSection(for: $0, asOf: now) == section }
     }
 
     static func doneTasks(from tasks: [PlootTask]) -> [PlootTask] {
-        tasks.filter { $0.done }
+        tasks.filter { $0.isLive && $0.done }
+    }
+
+    /// Drop tombstoned rows. Use this anywhere the UI lists tasks.
+    static func live(_ tasks: [PlootTask]) -> [PlootTask] {
+        tasks.filter { $0.isLive }
     }
 
     // MARK: - Display labels
@@ -104,6 +109,7 @@ enum TaskHelpers {
     ) -> Int {
         let completionDays = Set(
             tasks
+                .filter { $0.isLive }
                 .compactMap { $0.completedAt }
                 .map { calendar.startOfDay(for: $0) }
         )
@@ -143,7 +149,7 @@ enum TaskHelpers {
         return (0..<7).reversed().compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
             let count = tasks.filter { task in
-                guard let completedAt = task.completedAt else { return false }
+                guard task.isLive, let completedAt = task.completedAt else { return false }
                 return calendar.isDate(completedAt, inSameDayAs: day)
             }.count
             return DayBucket(

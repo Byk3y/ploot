@@ -18,6 +18,8 @@ final class PlootProject {
     /// added as a lightweight SwiftData migration without rejecting existing
     /// rows; nil means "never mutated since the column arrived."
     var updatedAt: Date?
+    /// Soft-delete tombstone; see PlootTask.deletedAt for rationale.
+    var deletedAt: Date?
 
     init(
         id: String,
@@ -37,6 +39,15 @@ final class PlootProject {
     func touch() {
         updatedAt = Date()
     }
+
+    @MainActor
+    func softDelete() {
+        deletedAt = Date()
+        touch()
+        SyncService.shared.push(project: self)
+    }
+
+    var isLive: Bool { deletedAt == nil }
 }
 
 /// Token-backed color choices for project tiles. Raw-String so SwiftData

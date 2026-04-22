@@ -57,6 +57,8 @@ final class Subtask {
     /// on-device rows; nil means "never mutated since the column arrived"
     /// and is treated as distant-past at sync time.
     var updatedAt: Date?
+    /// Soft-delete tombstone; see PlootTask.deletedAt for rationale.
+    var deletedAt: Date?
     var task: PlootTask?
 
     init(title: String, done: Bool = false, order: Int = 0) {
@@ -69,16 +71,35 @@ final class Subtask {
 
     /// Toggle or set completion. Bumps both this subtask's timestamp and the
     /// parent task's — from sync's perspective, a subtask change counts as a
-    /// task change.
+    /// task change. Push immediately (synchronously) so the DTO captures the
+    /// live parent id before any downstream relationship mutation can nil it.
+    ///
+    /// @MainActor: callers are always SwiftUI views; isolation lets us call
+    /// the main-actor SyncService without a Task hop that could defer the
+    /// DTO capture until after the parent relationship was cleared.
+    @MainActor
     func setDone(_ value: Bool) {
         done = value
         touch()
         task?.touch()
+        SyncService.shared.push(subtask: self)
+        if let parent = self.task { SyncService.shared.push(task: parent) }
     }
 
     func touch() {
         updatedAt = Date()
     }
+
+    @MainActor
+    func softDelete() {
+        deletedAt = Date()
+        touch()
+        task?.touch()
+        SyncService.shared.push(subtask: self)
+        if let parent = self.task { SyncService.shared.push(task: parent) }
+    }
+
+    var isLive: Bool { deletedAt == nil }
 }
 
 // MARK: - PlootTask model
@@ -119,6 +140,11 @@ final class PlootTask {
     /// added as a lightweight SwiftData migration without rejecting existing
     /// rows; see Subtask.updatedAt for the full rationale.
     var updatedAt: Date?
+    /// Soft-delete tombstone. When non-nil, this task is deleted as far as
+    /// the UI is concerned — @Query call sites filter it out — but the row
+    /// sticks around long enough for the sync layer to propagate the
+    /// deletion to other devices.
+    var deletedAt: Date?
 
     init(
         title: String,
@@ -159,8 +185,11 @@ final class PlootTask {
 
     /// Apply a done/undone toggle with the side-effects needed for UI to
     /// stay consistent (section, timestamps). Also re-syncs the task's
-    /// local reminder — marking done cancels any pending notification;
-    /// un-marking may re-schedule if a future dueDate is still set.
+    /// local reminder and pushes the change upstream to Supabase.
+    /// @MainActor because ReminderService and SyncService are both
+    /// main-actor-isolated; our call sites are SwiftUI views so this is
+    /// already the case, we're just telling the compiler.
+    @MainActor
     func setDone(_ value: Bool) {
         done = value
         if value {
@@ -173,7 +202,8 @@ final class PlootTask {
             }
         }
         touch()
-        Task { @MainActor in ReminderService.shared.schedule(for: self) }
+        ReminderService.shared.schedule(for: self)
+        SyncService.shared.push(task: self)
     }
 
     /// Bump `updatedAt` to now. Call after any mutation that should flow up
@@ -181,4 +211,19 @@ final class PlootTask {
     func touch() {
         updatedAt = Date()
     }
+
+    /// Soft-delete. Stamps `deletedAt` and bumps `updatedAt` so the tombstone
+    /// is pushed to Supabase on the next sync. UI queries filter
+    /// `deletedAt != nil` out so the row disappears instantly. Hard-removal
+    /// happens during the GC pass (future).
+    @MainActor
+    func softDelete() {
+        deletedAt = Date()
+        touch()
+        SyncService.shared.push(task: self)
+    }
+
+    /// `true` for rows the UI should render. False for tombstones pending
+    /// deletion propagation.
+    var isLive: Bool { deletedAt == nil }
 }
