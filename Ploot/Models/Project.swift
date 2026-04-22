@@ -13,6 +13,9 @@ final class PlootProject {
     var tileColor: ProjectTileColor
     /// Display ordering in the Projects screen list.
     var order: Int
+    /// Bumped on every mutation — basis for last-write-wins conflict
+    /// resolution once Supabase sync lands.
+    var updatedAt: Date
 
     init(
         id: String,
@@ -26,6 +29,11 @@ final class PlootProject {
         self.emoji = emoji
         self.tileColor = tileColor
         self.order = order
+        self.updatedAt = Date()
+    }
+
+    func touch() {
+        updatedAt = Date()
     }
 }
 
