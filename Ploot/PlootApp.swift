@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct PlootApp: App {
@@ -7,6 +8,11 @@ struct PlootApp: App {
 
     init() {
         PlootFonts.register()
+
+        // Register the foreground-banner delegate before any notification
+        // would have the chance to fire. Must be set before any scheduled
+        // reminder lands while the user is actively using the app.
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
 
         do {
             self.modelContainer = try ModelContainer(
