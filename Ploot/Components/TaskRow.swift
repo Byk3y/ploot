@@ -5,6 +5,8 @@ struct TaskRow: View {
     var project: PlootProject?
     var onToggle: (Bool) -> Void
     var onOpen: () -> Void
+    var onEdit: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     @Environment(\.plootPalette) private var palette
     @State private var justCompleted: Bool = false
@@ -55,6 +57,24 @@ struct TaskRow: View {
         }
         .buttonStyle(.plain)
         .animation(Motion.easeOut(duration: 0.3), value: justCompleted)
+        .contextMenu {
+            Button {
+                onToggle(!task.done)
+            } label: {
+                Label(task.done ? "Mark as not done" : "Mark as done",
+                      systemImage: task.done ? "circle" : "checkmark.circle")
+            }
+            if let onEdit {
+                Button(action: onEdit) {
+                    Label("Edit", systemImage: "pencil")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 
     private var hasMeta: Bool {

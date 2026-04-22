@@ -8,7 +8,11 @@ struct TodayScreen: View {
     @Query(sort: \PlootTask.createdAt, order: .reverse) private var allTasks: [PlootTask]
     @Query(sort: \PlootProject.order) private var projects: [PlootProject]
 
+    @State private var editingTask: PlootTask? = nil
+    @State private var deletingTask: PlootTask? = nil
+
     @Environment(\.plootPalette) private var palette
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         ScreenFrame(
@@ -18,6 +22,27 @@ struct TodayScreen: View {
             trailing: { trailingAvatar },
             content: { list }
         )
+        .sheet(item: $editingTask) { task in
+            QuickAddSheet(existingTask: task, onClose: { editingTask = nil })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+        }
+        .alert("Delete this task?", isPresented: .init(
+            get: { deletingTask != nil },
+            set: { if !$0 { deletingTask = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { deletingTask = nil }
+            Button("Delete", role: .destructive) {
+                if let task = deletingTask {
+                    modelContext.delete(task)
+                    try? modelContext.save()
+                }
+                deletingTask = nil
+            }
+        } message: {
+            Text("This can't be undone.")
+        }
     }
 
     private var trailingAvatar: some View {
@@ -95,7 +120,9 @@ struct TodayScreen: View {
             task: task,
             project: TaskHelpers.project(id: task.projectId, from: projects),
             onToggle: { task.setDone($0) },
-            onOpen: { onOpen(task) }
+            onOpen: { onOpen(task) },
+            onEdit: { editingTask = task },
+            onDelete: { deletingTask = task }
         )
     }
 

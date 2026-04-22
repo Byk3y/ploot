@@ -2,24 +2,57 @@ import SwiftUI
 import SwiftData
 
 struct QuickAddSheet: View {
+    /// When non-nil, the sheet is in edit mode: fields are prefilled from
+    /// this task and Save mutates it in place instead of inserting a new row.
+    let existingTask: PlootTask?
     var onClose: () -> Void
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.modelContext) private var modelContext
 
-    @State private var title: String = ""
-    @State private var note: String = ""
-    @State private var projectId: String = "inbox"
-    @State private var priority: Priority = .normal
-    @State private var due: DueOption = .today
-    @State private var time: String? = nil
-    @State private var remindMe: Bool = false
-    @State private var repeats: RepeatOption = .never
-    @State private var subtasks: [Subtask] = []
+    @State private var title: String
+    @State private var note: String
+    @State private var projectId: String
+    @State private var priority: Priority
+    @State private var due: DueOption
+    @State private var time: String?
+    @State private var remindMe: Bool
+    @State private var repeats: RepeatOption
+    @State private var subtasks: [Subtask]
     @State private var subInput: String = ""
     @State private var focusedSection: FocusedSection? = nil
     @State private var placeholderIndex: Int = Int.random(in: 0..<placeholders.count)
     @FocusState private var titleFocused: Bool
+
+    init(existingTask: PlootTask? = nil, onClose: @escaping () -> Void) {
+        self.existingTask = existingTask
+        self.onClose = onClose
+
+        // Prefill from the task when editing; blank defaults when creating.
+        _title = State(initialValue: existingTask?.title ?? "")
+        _note = State(initialValue: existingTask?.note ?? "")
+        _projectId = State(initialValue: existingTask?.projectId ?? "inbox")
+        _priority = State(initialValue: existingTask?.priority ?? .normal)
+        _due = State(initialValue: DueOption.fromDate(existingTask?.dueDate))
+        _time = State(initialValue: Self.extractTimeSlot(from: existingTask?.dueDate))
+        _remindMe = State(initialValue: false) // not stored on the model yet
+        _repeats = State(initialValue: RepeatOption.fromStored(existingTask?.repeats))
+        _subtasks = State(initialValue: existingTask?.subtasks.sorted { $0.order < $1.order } ?? [])
+    }
+
+    /// Read a "h:mm a" time slot string out of a date, or return nil if the
+    /// date is midnight-aligned (meaning no time was set).
+    private static func extractTimeSlot(from date: Date?) -> String? {
+        guard let date else { return nil }
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: date)
+        let minute = cal.component(.minute, from: date)
+        if hour == 0 && minute == 0 { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "h:mm a"
+        return fmt.string(from: date)
+    }
 
     private static let placeholders = [
         "Water the mysterious plant",
@@ -55,7 +88,9 @@ struct QuickAddSheet: View {
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s1)
                 .padding(.bottom, Spacing.s6)
+                .dismissKeyboardOnTap()
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .background(palette.bg)
         .overlay(alignment: .top) {
@@ -64,7 +99,11 @@ struct QuickAddSheet: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedCornersTopShape())
-        .onAppear { titleFocused = true }
+        .onAppear {
+            // Only autofocus in create mode — in edit mode the user already
+            // has a title and likely wants to tweak something specific.
+            if existingTask == nil { titleFocused = true }
+        }
     }
 
     // MARK: - Header
@@ -85,7 +124,7 @@ struct QuickAddSheet: View {
 
             Spacer()
 
-            Text("New task")
+            Text(existingTask == nil ? "New task" : "Edit task")
                 .font(.fraunces(size: 20, weight: 600, soft: 80))
                 .tracking(-0.015 * 20)
                 .foregroundStyle(palette.fg1)
@@ -396,18 +435,42 @@ struct QuickAddSheet: View {
         let trimmed = title.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         let resolvedDate = due.date(timeSlot: time)
-        let task = PlootTask(
-            title: trimmed,
-            note: note.isEmpty ? nil : note,
-            due: nil,  // display label derives from dueDate now
-            dueDate: resolvedDate,
-            projectId: projectId == "inbox" ? nil : projectId,
-            priority: priority,
-            subtasks: subtasks,
-            section: .today,
-            repeats: repeats == .never ? nil : repeats.rawValue
-        )
-        modelContext.insert(task)
+        let resolvedProjectId: String? = projectId == "inbox" ? nil : projectId
+        let resolvedRepeats: String? = repeats == .never ? nil : repeats.rawValue
+        let resolvedNote: String? = note.isEmpty ? nil : note
+
+        if let existing = existingTask {
+            // Update in place. Keep createdAt/completedAt/done untouched —
+            // those are managed by TaskRow/detail-screen toggles, not this sheet.
+            existing.title = trimmed
+            existing.note = resolvedNote
+            existing.dueDate = resolvedDate
+            existing.due = nil  // derived labels win now
+            existing.projectId = resolvedProjectId
+            existing.priority = priority
+            existing.repeats = resolvedRepeats
+            // Replace the subtasks list: delete the ones that were removed,
+            // reuse the ones still present, insert the new ones.
+            let keptIds = Set(subtasks.map(\.id))
+            for old in existing.subtasks where !keptIds.contains(old.id) {
+                modelContext.delete(old)
+            }
+            existing.subtasks = subtasks
+            existing.touch()
+        } else {
+            let task = PlootTask(
+                title: trimmed,
+                note: resolvedNote,
+                due: nil,  // display label derives from dueDate now
+                dueDate: resolvedDate,
+                projectId: resolvedProjectId,
+                priority: priority,
+                subtasks: subtasks,
+                section: .today,
+                repeats: resolvedRepeats
+            )
+            modelContext.insert(task)
+        }
         try? modelContext.save()
         onClose()
     }
@@ -526,11 +589,42 @@ enum DueOption: String, CaseIterable, Identifiable {
         let cal = Calendar(identifier: .gregorian)
         return (cal.component(.hour, from: date), cal.component(.minute, from: date))
     }
+
+    /// Classify an existing dueDate back into the coarse picker choice. Used
+    /// in edit mode to preselect the right pill. If the date is further out
+    /// than "this week", defaults to `.someday` — we don't have a specific
+    /// UI affordance for absolute dates yet.
+    static func fromDate(_ date: Date?, now: Date = Date(), calendar: Calendar = .current) -> DueOption {
+        guard let date else { return .today }
+        let startOfToday = calendar.startOfDay(for: now)
+        let targetDay = calendar.startOfDay(for: date)
+        let daysAhead = calendar.dateComponents([.day], from: startOfToday, to: targetDay).day ?? 0
+        if daysAhead == 0 { return .today }
+        if daysAhead == 1 { return .tomorrow }
+        // Next Saturday
+        if let nextSaturday = calendar.nextDate(after: now, matching: DateComponents(weekday: 7), matchingPolicy: .nextTime),
+           calendar.isDate(date, inSameDayAs: nextSaturday) {
+            return .weekend
+        }
+        // Next Monday
+        if let nextMonday = calendar.nextDate(after: now, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime),
+           calendar.isDate(date, inSameDayAs: nextMonday) {
+            return .nextweek
+        }
+        return .someday
+    }
 }
 
 enum RepeatOption: String, CaseIterable, Identifiable {
     case never, daily, weekly, monthly
     var id: String { rawValue }
+
+    /// Reverse the `repeats == .never ? nil : repeats.rawValue` encoding used
+    /// at save time. Anything unrecognized falls back to `.never`.
+    static func fromStored(_ stored: String?) -> RepeatOption {
+        guard let stored, let match = RepeatOption(rawValue: stored) else { return .never }
+        return match
+    }
 }
 
 // MARK: - Subviews
@@ -768,6 +862,14 @@ private struct ProjectPicker: View {
 
     private var header: some View {
         Button {
+            // Dismiss any focused text input (task title, note, subtask input)
+            // the moment the picker opens — user is done typing, moving on.
+            if !isOpen {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
+            }
             isOpen.toggle()
             if !isOpen { query = "" }
         } label: {
@@ -839,6 +941,11 @@ private struct ProjectPicker: View {
                         selection = project.id
                         isOpen = false
                         query = ""
+                        // Dismiss the search field keyboard if it was open.
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
                     } label: {
                         HStack(spacing: 10) {
                             Text(project.emoji)
@@ -896,7 +1003,6 @@ private struct ProjectPicker: View {
                     )
                 }
             }
-            .frame(maxHeight: 260)
         }
         .padding(10)
         .overlay(alignment: .top) {

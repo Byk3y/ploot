@@ -9,14 +9,15 @@ struct TaskDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
+    @State private var editing: Bool = false
+    @State private var confirmingDelete: Bool = false
+
     var body: some View {
         ScreenFrame(
             leading: {
                 HeaderButton(systemImage: "arrow.left") { dismiss() }
             },
-            trailing: {
-                HeaderButton(systemImage: "ellipsis", action: {})
-            }
+            trailing: { moreMenu }
         ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -36,6 +37,54 @@ struct TaskDetailScreen: View {
                 .padding(.horizontal, Spacing.s5)
                 .padding(.top, Spacing.s2)
             }
+        }
+        .sheet(isPresented: $editing) {
+            QuickAddSheet(existingTask: task, onClose: { editing = false })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+        }
+        .alert("Delete this task?", isPresented: $confirmingDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { performDelete() }
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    /// ••• menu in the top-right. Looks identical to the other HeaderButtons
+    /// but wraps a Menu so taps reveal the action list.
+    private var moreMenu: some View {
+        Menu {
+            Button {
+                editing = true
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                confirmingDelete = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(palette.fg1)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(palette.bgElevated))
+                .overlay(Circle().strokeBorder(palette.borderInk, lineWidth: 2))
+        }
+        .menuStyle(.button)
+    }
+
+    private func performDelete() {
+        let taskToDelete = task
+        dismiss()
+        // Let the view unmount before freeing the model instance so the
+        // @Bindable @Model doesn't read deleted properties on its way out.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            modelContext.delete(taskToDelete)
+            try? modelContext.save()
         }
     }
 
