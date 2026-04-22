@@ -117,6 +117,31 @@ Every interactive element gets `.sensoryFeedback` — not optional. Use `.select
 - Pass the store down as a parameter, not via `@EnvironmentObject`. Screens are explicitly typed on what they need.
 - No persistence yet — seed data in `DemoData.swift`. TODO: SwiftData when that lands.
 
+## Supabase MCP access
+
+The owner has the **Supabase MCP server** wired up in `.mcp.json` (gitignored — contains a personal access token). When you open this repo in Claude Code, you have direct access to the project's Postgres database via `mcp__supabase__*` tools.
+
+- **Project ref:** `rnlzqlocipeecbejyutv` — URL: https://rnlzqlocipeecbejyutv.supabase.co
+- **Dashboard:** https://supabase.com/dashboard/project/rnlzqlocipeecbejyutv
+- **Migrations live at:** `supabase/migrations/*.sql` (numbered, checked in)
+
+### What to use, when
+
+- **Read inspection** (tables, columns, indexes, RLS state, row counts): `list_tables`, `list_extensions`, `list_migrations`, `execute_sql` with a SELECT. Use these freely — they're the fastest way to verify what's actually deployed.
+- **Writes (DDL)**: `apply_migration` for schema changes. Always also save the same SQL to `supabase/migrations/000N_<name>.sql` so the repo reflects DB state. Don't do schema changes as ad-hoc `execute_sql` — they'd be invisible in the repo.
+- **Writes (DML)**: `execute_sql` for INSERT/UPDATE/DELETE on real data. Gate on user confirmation for anything touching their rows.
+- **Health checks**: `get_advisors` surfaces RLS misconfigurations, missing indexes, policy overlaps. Run after any schema change.
+- **Runtime debugging**: `get_logs` pulls Postgres/Auth/Realtime logs for the last 24h.
+- **Types**: `generate_typescript_types` if we ever need a JS/TS client; not relevant for the iOS app directly.
+- **Docs**: `search_docs` hits Supabase's official docs in-session — prefer over web search for Supabase questions.
+
+### Operating rules
+
+- **Read-only vs read-write**: `.mcp.json` controls this via a `&read_only=true` URL flag. Default stance is read-only; the owner flips it off only when migrations/writes are planned. If a write tool errors with "Cannot apply migration in read-only mode", ask the owner to flip the flag and reconnect (`/mcp` → reconnect).
+- **RLS is on for every `public.*` table.** Direct `execute_sql` reads as the MCP service role bypass RLS, so you see all rows. In app code, the iOS client will only see its own rows via `auth.uid()`. Don't be confused when a table shows many rows via MCP but an authed query returns only the owner's.
+- **Never log or echo the access token.** It's in `.mcp.json` (gitignored). Don't paste it into commits, comments, error messages, or chat.
+- **Match SwiftData model shapes.** DB uses `snake_case`; Swift uses `camelCase`. Bridge with Supabase SDK config or `CodingKeys`. Columns mirror SwiftData fields 1:1 — if you add a field to a `@Model`, also write a migration for the corresponding column.
+
 ## Things deliberately not in scope yet
 
 - Persistence (SwiftData)
