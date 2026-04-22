@@ -70,6 +70,27 @@ Some symbols (e.g. `calendar`) have no `.fill` variant. The `PlootTab.icon` help
 
 `HomeView` attaches TabBar via `.safeAreaInset(edge: .bottom)`. TabBar itself should add minimal bottom padding (`Spacing.s1`), NOT 24pt — otherwise it stacks with the inset and floats too high on the home indicator.
 
+### A clean build ≠ a correct layout
+
+`xcodebuild … build` exiting `BUILD SUCCEEDED` proves the code compiles. It does **not** prove the UI is right. SwiftUI will happily let one view sit on top of another with no warning. Before committing any change that touches stacking, overlays, safe area, or nav-destination chrome: ask the owner to eyeball it on-device, not just accept a green build.
+
+Concretely — when you need a floating element to stop at a container's edge (not the screen edge), apply `.overlay` to the container **before** `.safeAreaInset` or other modifiers that grow/shift it. Example from this repo:
+
+```swift
+// Wrong: FAB anchors to screen bottom, covers the tab bar.
+ZStack(alignment: .bottomTrailing) {
+    tabContent.safeAreaInset(edge: .bottom) { TabBar(…) }
+    FAB(…).padding(.bottom, 24)
+}
+
+// Right: FAB anchors to tabContent's bottom = tab bar's top.
+tabContent
+    .overlay(alignment: .bottomTrailing) { FAB(…).padding(.bottom, 12) }
+    .safeAreaInset(edge: .bottom) { TabBar(…) }
+```
+
+If the owner flags a layout bug, the first move is a modifier reorder, not a redesign. Don't propose swapping the pattern (dock the FAB, go liquid-glass, etc.) unless the geometry fix has already been tried.
+
 ### Springs: bouncy, not stiff
 
 All motion uses `Motion.spring` (response 0.38, damping 0.62) or `Motion.springFast`. The brand is playful; do not use `.linear` or tight-damping springs for UI state. Press-collapse animations on buttons use `Motion.springFast`. Tab-icon scale uses `Motion.spring`.
@@ -110,9 +131,16 @@ Don't add scaffolding for these speculatively. Add them when the user asks.
 
 ## Git + commits
 
+- **Never commit before the owner has tested the change on-device.** The owner runs the app on a physical iPhone and is the sole authority on whether a change is correct. When you finish a change that affects UI, runtime behavior, or anything user-visible, stop and ask the owner to test it. Phrase it like: *"Build's clean — please run on your phone and tell me how it looks before I commit."* Only commit after explicit approval ("looks good," "ship it," "commit this," etc.).
+- After the owner confirms the change works, remind them if they forget: *"Want me to commit this now?"* Don't commit silently.
+- Exceptions where you can commit without asking:
+  - Pure documentation edits (`README.md`, `CLAUDE.md`, comments) with no code behavior change.
+  - `.gitignore` or `.env.example` additions.
+  - Reverts that the owner has just explicitly requested.
 - Small, scoped commits with conventional-commit prefixes: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`. See existing log for style.
 - `main` is the working branch. Push to `origin main` on github.com/Byk3y/ploot.
 - Do **not** rewrite history on commits the owner wrote (e.g. the original `Initial Commit`). Layer on top.
+- If a change needs reverting because it looks wrong on-device, use `git revert <sha>` — keep the paper trail, don't force-push.
 
 ## Useful one-liners
 
