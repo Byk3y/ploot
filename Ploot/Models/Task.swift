@@ -52,8 +52,11 @@ final class Subtask {
     var done: Bool
     var order: Int
     /// Bumped on every mutation — basis for last-write-wins conflict
-    /// resolution once Supabase sync lands.
-    var updatedAt: Date
+    /// resolution once Supabase sync lands. Optional so that adding this
+    /// field as a lightweight SwiftData migration doesn't reject existing
+    /// on-device rows; nil means "never mutated since the column arrived"
+    /// and is treated as distant-past at sync time.
+    var updatedAt: Date?
     var task: PlootTask?
 
     init(title: String, done: Bool = false, order: Int = 0) {
@@ -108,8 +111,10 @@ final class PlootTask {
     var createdAt: Date
     var completedAt: Date?
     /// Bumped on every mutation — basis for last-write-wins conflict
-    /// resolution once Supabase sync lands.
-    var updatedAt: Date
+    /// resolution once Supabase sync lands. Optional so this column can be
+    /// added as a lightweight SwiftData migration without rejecting existing
+    /// rows; see Subtask.updatedAt for the full rationale.
+    var updatedAt: Date?
 
     init(
         title: String,
