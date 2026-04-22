@@ -1,19 +1,49 @@
 import Foundation
+import SwiftData
 
+/// First-launch seed. Checks whether the model store already has tasks or
+/// projects and only inserts the demo set if both are empty — safe to call
+/// on every launch.
 enum DemoData {
-    static let projects: [PlootProject] = [
-        PlootProject(id: "work",    name: "Work",       emoji: "💼", tileColor: .sky,     openCount: 8,  doneCount: 12),
-        PlootProject(id: "home",    name: "Home",       emoji: "🏡", tileColor: .forest,  openCount: 4,  doneCount: 6),
-        PlootProject(id: "side",    name: "Side quest", emoji: "🚀", tileColor: .plum,    openCount: 5,  doneCount: 2),
-        PlootProject(id: "errands", name: "Errands",    emoji: "🛒", tileColor: .butter,  openCount: 3,  doneCount: 8),
-        PlootProject(id: "reading", name: "Reading",    emoji: "📚", tileColor: .primary, openCount: 12, doneCount: 3),
-    ]
 
+    /// The Inbox project isn't persisted; it's used as a placeholder in the
+    /// QuickAdd project picker when the user hasn't chosen one yet.
     static let inboxProject = PlootProject(
-        id: "inbox", name: "Inbox", emoji: "📮", tileColor: .inbox, openCount: 0, doneCount: 0
+        id: "inbox",
+        name: "Inbox",
+        emoji: "📮",
+        tileColor: .inbox,
+        order: 0
     )
 
-    static func tasks() -> [PlootTask] {
+    static func seedIfNeeded(context: ModelContext) {
+        let taskCount = (try? context.fetchCount(FetchDescriptor<PlootTask>())) ?? 0
+        let projectCount = (try? context.fetchCount(FetchDescriptor<PlootProject>())) ?? 0
+        guard taskCount == 0 && projectCount == 0 else { return }
+
+        for project in seededProjects() {
+            context.insert(project)
+        }
+        for task in seededTasks() {
+            context.insert(task)
+        }
+
+        try? context.save()
+    }
+
+    // MARK: - Seed sets
+
+    private static func seededProjects() -> [PlootProject] {
+        [
+            PlootProject(id: "work",    name: "Work",       emoji: "💼", tileColor: .sky,     order: 1),
+            PlootProject(id: "home",    name: "Home",       emoji: "🏡", tileColor: .forest,  order: 2),
+            PlootProject(id: "side",    name: "Side quest", emoji: "🚀", tileColor: .plum,    order: 3),
+            PlootProject(id: "errands", name: "Errands",    emoji: "🛒", tileColor: .butter,  order: 4),
+            PlootProject(id: "reading", name: "Reading",    emoji: "📚", tileColor: .primary, order: 5),
+        ]
+    }
+
+    private static func seededTasks() -> [PlootTask] {
         [
             PlootTask(
                 title: "Reply to the one email I've been avoiding",
@@ -38,9 +68,9 @@ enum DemoData {
                 projectId: "work",
                 priority: .high,
                 subtasks: [
-                    Subtask(title: "Problem statement", done: true),
-                    Subtask(title: "Market data + chart", done: false),
-                    Subtask(title: "The funny opening slide", done: false)
+                    Subtask(title: "Problem statement", done: true, order: 0),
+                    Subtask(title: "Market data + chart", done: false, order: 1),
+                    Subtask(title: "The funny opening slide", done: false, order: 2)
                 ],
                 section: .today
             ),
