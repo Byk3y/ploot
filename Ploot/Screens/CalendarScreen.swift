@@ -1,7 +1,8 @@
 import SwiftUI
+import SwiftData
 
 struct CalendarScreen: View {
-    @Bindable var store: TaskStore
+    @Query private var allTasks: [PlootTask]
 
     @State private var selected: Date = Date()
     @Environment(\.plootPalette) private var palette
@@ -56,7 +57,9 @@ struct CalendarScreen: View {
     }
 
     private var timeline: some View {
-        let dayTasks = Array(store.tasks(in: .today).prefix(4))
+        let dayTasks = Array(
+            TaskHelpers.tasks(in: .today, from: allTasks).prefix(4)
+        )
         return VStack(spacing: Spacing.s2) {
             ForEach(Array(timeSlots.enumerated()), id: \.offset) { i, slot in
                 HStack(alignment: .top, spacing: 14) {

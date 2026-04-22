@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct ProjectsScreen: View {
-    @Bindable var store: TaskStore
+    @Query(sort: \PlootProject.order) private var projects: [PlootProject]
+    @Query private var allTasks: [PlootTask]
 
     @Environment(\.plootPalette) private var palette
 
@@ -15,8 +17,12 @@ struct ProjectsScreen: View {
             content: {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(store.projects) { project in
-                            ProjectCard(project: project)
+                        ForEach(projects) { project in
+                            ProjectCard(
+                                project: project,
+                                openCount: openCount(for: project),
+                                doneCount: doneCount(for: project)
+                            )
                         }
                         Color.clear.frame(height: 120)
                     }
@@ -26,16 +32,26 @@ struct ProjectsScreen: View {
             }
         )
     }
+
+    private func openCount(for project: PlootProject) -> Int {
+        allTasks.filter { $0.projectId == project.id && !$0.done }.count
+    }
+
+    private func doneCount(for project: PlootProject) -> Int {
+        allTasks.filter { $0.projectId == project.id && $0.done }.count
+    }
 }
 
 private struct ProjectCard: View {
     let project: PlootProject
+    let openCount: Int
+    let doneCount: Int
 
     @Environment(\.plootPalette) private var palette
 
     var body: some View {
-        let total = project.openCount + project.doneCount
-        let pct = total == 0 ? 0 : Double(project.doneCount) / Double(total)
+        let total = openCount + doneCount
+        let pct = total == 0 ? 0 : Double(doneCount) / Double(total)
 
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s3) {
@@ -58,9 +74,9 @@ private struct ProjectCard: View {
                         .foregroundStyle(palette.fg1)
 
                     HStack(spacing: Spacing.s2) {
-                        Text("\(project.openCount) open")
+                        Text("\(openCount) open")
                         Circle().fill(palette.fg3).frame(width: 3, height: 3)
-                        Text("\(project.doneCount) done")
+                        Text("\(doneCount) done")
                     }
                     .font(.geist(size: 13, weight: 400))
                     .foregroundStyle(palette.fg3)

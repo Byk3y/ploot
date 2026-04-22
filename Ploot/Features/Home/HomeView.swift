@@ -1,7 +1,7 @@
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
-    @State private var store = TaskStore()
     @State private var tab: PlootTab = .today
     @State private var quickAddOpen: Bool = false
     @State private var settingsOpen: Bool = false
@@ -14,11 +14,9 @@ struct HomeView: View {
         NavigationStack {
             tabContent
                 .overlay(alignment: .bottomTrailing) {
-                    // Ordering matters: this overlay is applied to tabContent
-                    // *before* .safeAreaInset. That anchors the FAB to the
-                    // bottom of the content area, which is the top of the
-                    // TabBar — so it floats 12pt above the bar instead of
-                    // over it, regardless of device safe-area size.
+                    // Order matters: overlay applies before .safeAreaInset so
+                    // the FAB anchors to the tab content's bottom (the tab
+                    // bar's top) and doesn't cover any tab.
                     FAB(action: { quickAddOpen = true })
                         .padding(.trailing, 20)
                         .padding(.bottom, 12)
@@ -28,16 +26,16 @@ struct HomeView: View {
                     TabBar(current: $tab)
                 }
                 .background(palette.bg.ignoresSafeArea())
-            .navigationDestination(item: $openTask) { task in
-                TaskDetailScreen(store: store, taskId: task.id)
-                    .navigationBarBackButtonHidden()
-                    .toolbar(.hidden, for: .navigationBar)
-                    .plootTheme(theme)
-            }
+                .navigationDestination(item: $openTask) { task in
+                    TaskDetailScreen(task: task)
+                        .navigationBarBackButtonHidden()
+                        .toolbar(.hidden, for: .navigationBar)
+                        .plootTheme(theme)
+                }
         }
         .plootTheme(theme)
         .sheet(isPresented: $quickAddOpen) {
-            QuickAddSheet(store: store, onClose: { quickAddOpen = false })
+            QuickAddSheet(onClose: { quickAddOpen = false })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
                 .presentationCornerRadius(28)
@@ -56,16 +54,15 @@ struct HomeView: View {
         switch tab {
         case .today:
             TodayScreen(
-                store: store,
                 onOpen: { openTask = $0 },
                 onOpenSettings: { settingsOpen = true }
             )
         case .projects:
-            ProjectsScreen(store: store)
+            ProjectsScreen()
         case .calendar:
-            CalendarScreen(store: store)
+            CalendarScreen()
         case .done:
-            DoneScreen(store: store, onOpen: { openTask = $0 })
+            DoneScreen(onOpen: { openTask = $0 })
         }
     }
 }

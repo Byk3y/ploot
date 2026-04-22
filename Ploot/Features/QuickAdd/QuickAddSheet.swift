@@ -1,10 +1,11 @@
 import SwiftUI
+import SwiftData
 
 struct QuickAddSheet: View {
-    @Bindable var store: TaskStore
     var onClose: () -> Void
 
     @Environment(\.plootPalette) private var palette
+    @Environment(\.modelContext) private var modelContext
 
     @State private var title: String = ""
     @State private var note: String = ""
@@ -201,7 +202,6 @@ struct QuickAddSheet: View {
 
     private var projectPicker: some View {
         ProjectPicker(
-            store: store,
             selection: $projectId,
             isOpen: Binding(
                 get: { focusedSection == .project },
@@ -387,7 +387,7 @@ struct QuickAddSheet: View {
         let trimmed = subInput.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         withAnimation(Motion.springFast) {
-            subtasks.append(Subtask(title: trimmed))
+            subtasks.append(Subtask(title: trimmed, order: subtasks.count))
         }
         subInput = ""
     }
@@ -410,7 +410,8 @@ struct QuickAddSheet: View {
             section: .today,
             repeats: repeats == .never ? nil : repeats.rawValue
         )
-        store.add(task)
+        modelContext.insert(task)
+        try? modelContext.save()
         onClose()
     }
 
@@ -670,15 +671,15 @@ private struct SettingBlock<Content: View>: View {
 /// Compact inline project picker: header shows current selection, tapping
 /// expands a searchable vertical list. Scales cleanly from 3 to 30 projects.
 private struct ProjectPicker: View {
-    @Bindable var store: TaskStore
     @Binding var selection: String
     @Binding var isOpen: Bool
 
+    @Query(sort: \PlootProject.order) private var projects: [PlootProject]
     @State private var query: String = ""
     @Environment(\.plootPalette) private var palette
 
     private var allOptions: [PlootProject] {
-        [DemoData.inboxProject] + store.projects
+        [DemoData.inboxProject] + projects
     }
 
     private var current: PlootProject {

@@ -1,13 +1,16 @@
 import SwiftUI
+import SwiftData
 
 struct DoneScreen: View {
-    @Bindable var store: TaskStore
     var onOpen: (PlootTask) -> Void
+
+    @Query(sort: \PlootTask.completedAt, order: .reverse) private var allTasks: [PlootTask]
+    @Query private var projects: [PlootProject]
 
     @Environment(\.plootPalette) private var palette
 
     var body: some View {
-        let done = store.doneTasks
+        let done = TaskHelpers.doneTasks(from: allTasks)
         return ScreenFrame(
             title: "Done",
             subtitle: "\(done.count) this week. Look at you go."
@@ -27,8 +30,8 @@ struct DoneScreen: View {
                         ForEach(done) { task in
                             TaskRow(
                                 task: task,
-                                project: store.project(id: task.projectId),
-                                onToggle: { store.toggle(task.id, done: $0) },
+                                project: TaskHelpers.project(id: task.projectId, from: projects),
+                                onToggle: { task.setDone($0) },
                                 onOpen: { onOpen(task) }
                             )
                         }
@@ -44,7 +47,7 @@ struct DoneScreen: View {
             Text("🔥")
                 .font(.system(size: 48))
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(store.streak)")
+                Text("\(TaskHelpers.streak(from: allTasks))")
                     .font(.fraunces(size: 34, weight: 600))
                     .foregroundStyle(palette.onPrimary)
                 Text("day streak · don't break it")
@@ -62,7 +65,7 @@ struct DoneScreen: View {
 
     private var weeklyChart: some View {
         let labels = ["M", "T", "W", "T", "F", "S", "S"]
-        let counts = store.weeklyCounts
+        let counts = TaskHelpers.weeklyCounts(from: allTasks)
         return HStack(alignment: .bottom, spacing: Spacing.s2) {
             ForEach(Array(counts.enumerated()), id: \.offset) { i, n in
                 let isToday = i == counts.count - 1

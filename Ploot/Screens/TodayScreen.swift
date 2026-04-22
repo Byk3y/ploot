@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct TodayScreen: View {
-    @Bindable var store: TaskStore
     var onOpen: (PlootTask) -> Void
     var onOpenSettings: () -> Void
+
+    @Query(sort: \PlootTask.createdAt, order: .reverse) private var allTasks: [PlootTask]
+    @Query(sort: \PlootProject.order) private var projects: [PlootProject]
 
     @Environment(\.plootPalette) private var palette
 
@@ -11,7 +14,7 @@ struct TodayScreen: View {
         ScreenFrame(
             title: "Today",
             titleSuffix: AnyView(todaySuffix),
-            subtitle: subtitle,
+            subtitle: TaskHelpers.todaySubtitle(from: allTasks),
             trailing: { trailingAvatar },
             content: { list }
         )
@@ -35,21 +38,11 @@ struct TodayScreen: View {
             .foregroundStyle(palette.fg3)
     }
 
-    private var subtitle: String {
-        let today = store.tasks(in: .today)
-        let total = today.count
-        let done = today.filter { $0.done }.count
-        if total == 0 {
-            return "Nothing on the list. Suspicious."
-        }
-        return "\(done) of \(total) crushed. Keep going."
-    }
-
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 progressStrip
-                let overdue = store.tasks(in: .overdue)
+                let overdue = TaskHelpers.tasks(in: .overdue, from: allTasks)
                 if !overdue.isEmpty {
                     Section {
                         ForEach(overdue) { row($0) }
@@ -58,7 +51,7 @@ struct TodayScreen: View {
                     }
                 }
 
-                let today = store.tasks(in: .today)
+                let today = TaskHelpers.tasks(in: .today, from: allTasks)
                 Section {
                     if today.isEmpty {
                         EmptyState(
@@ -73,7 +66,7 @@ struct TodayScreen: View {
                     SectionHeader(title: "Today", count: today.count)
                 }
 
-                let later = store.tasks(in: .later)
+                let later = TaskHelpers.tasks(in: .later, from: allTasks)
                 if !later.isEmpty {
                     Section {
                         ForEach(later) { row($0) }
@@ -88,7 +81,7 @@ struct TodayScreen: View {
     }
 
     private var progressStrip: some View {
-        let today = store.tasks(in: .today)
+        let today = TaskHelpers.tasks(in: .today, from: allTasks)
         let total = today.count
         let done = today.filter { $0.done }.count
         return ProgressBar(value: total == 0 ? 0 : Double(done) / Double(total))
@@ -100,8 +93,8 @@ struct TodayScreen: View {
     private func row(_ task: PlootTask) -> some View {
         TaskRow(
             task: task,
-            project: store.project(id: task.projectId),
-            onToggle: { store.toggle(task.id, done: $0) },
+            project: TaskHelpers.project(id: task.projectId, from: projects),
+            onToggle: { task.setDone($0) },
             onOpen: { onOpen(task) }
         )
     }

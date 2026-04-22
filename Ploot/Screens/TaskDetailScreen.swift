@@ -1,58 +1,51 @@
 import SwiftUI
+import SwiftData
 
 struct TaskDetailScreen: View {
-    @Bindable var store: TaskStore
-    let taskId: UUID
+    @Bindable var task: PlootTask
 
+    @Query private var projects: [PlootProject]
     @Environment(\.plootPalette) private var palette
     @Environment(\.dismiss) private var dismiss
-
-    private var task: PlootTask? {
-        store.tasks.first { $0.id == taskId }
-    }
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        if let task {
-            ScreenFrame(
-                leading: {
-                    HeaderButton(systemImage: "arrow.left") { dismiss() }
-                },
-                trailing: {
-                    HeaderButton(systemImage: "ellipsis", action: {})
-                }
-            ) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        titleRow(task)
-                        chipRow(task)
-                            .padding(.top, Spacing.s5)
-                            .padding(.leading, 46)
-                        if let note = task.note {
-                            noteCard(note)
-                        }
-                        if !task.subtasks.isEmpty {
-                            subtasksSection(task)
-                        }
-                        metaFooter(task)
-                        Color.clear.frame(height: 80)
-                    }
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.top, Spacing.s2)
-                }
+        ScreenFrame(
+            leading: {
+                HeaderButton(systemImage: "arrow.left") { dismiss() }
+            },
+            trailing: {
+                HeaderButton(systemImage: "ellipsis", action: {})
             }
-        } else {
-            Color.clear
-                .task { dismiss() }
+        ) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    titleRow
+                    chipRow
+                        .padding(.top, Spacing.s5)
+                        .padding(.leading, 46)
+                    if let note = task.note, !note.isEmpty {
+                        noteCard(note)
+                    }
+                    if !task.subtasks.isEmpty {
+                        subtasksSection
+                    }
+                    metaFooter
+                    Color.clear.frame(height: 80)
+                }
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s2)
+            }
         }
     }
 
-    private func titleRow(_ task: PlootTask) -> some View {
+    private var titleRow: some View {
         HStack(alignment: .top, spacing: 14) {
             PlootCheckbox(
                 checked: task.done,
                 priority: task.priority,
                 size: 32,
-                onToggle: { store.toggle(task.id, done: $0) }
+                onToggle: { task.setDone($0) }
             )
             .padding(.top, 4)
 
@@ -67,12 +60,12 @@ struct TaskDetailScreen: View {
         }
     }
 
-    private func chipRow(_ task: PlootTask) -> some View {
+    private var chipRow: some View {
         FlowLayout(spacing: 8) {
             if let due = task.due {
                 Chip(text: due, color: .clay, icon: "calendar")
             }
-            if let project = store.project(id: task.projectId) {
+            if let project = TaskHelpers.project(id: task.projectId, from: projects) {
                 Chip(text: project.name, color: .sky, icon: "folder")
             }
             if task.priority == .urgent {
@@ -94,22 +87,23 @@ struct TaskDetailScreen: View {
             .padding(.top, Spacing.s6)
     }
 
-    private func subtasksSection(_ task: PlootTask) -> some View {
+    private var subtasksSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            let doneCount = task.subtasks.filter { $0.done }.count
-            Text("Sub-tasks · \(doneCount)/\(task.subtasks.count)")
+            let sorted = task.subtasks.sorted { $0.order < $1.order }
+            let doneCount = sorted.filter { $0.done }.count
+            Text("Sub-tasks · \(doneCount)/\(sorted.count)")
                 .font(.jetBrainsMono(size: 11, weight: 600))
                 .tracking(11 * 0.08)
                 .textCase(.uppercase)
                 .foregroundStyle(palette.fg2)
                 .padding(.bottom, 10)
 
-            ForEach(task.subtasks) { sub in
+            ForEach(sorted) { sub in
                 HStack(spacing: Spacing.s3) {
                     PlootCheckbox(
                         checked: sub.done,
                         size: 20,
-                        onToggle: { _ in store.toggleSubtask(taskId: task.id, subtaskId: sub.id) }
+                        onToggle: { _ in sub.done.toggle() }
                     )
                     Text(sub.title)
                         .font(.geist(size: 14, weight: 400))
@@ -127,7 +121,7 @@ struct TaskDetailScreen: View {
         .padding(.top, 28)
     }
 
-    private func metaFooter(_ task: PlootTask) -> some View {
+    private var metaFooter: some View {
         VStack(spacing: 10) {
             DetailRow(icon: "bell", label: "Remind me", value: "9:00 AM")
             DetailRow(icon: "repeat", label: "Repeats", value: task.repeats ?? "Never")
