@@ -41,6 +41,14 @@ struct ProjectsScreen: View {
                                     onEdit: { editingProject = project },
                                     onDelete: { deletingProject = project }
                                 )
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.85)
+                                        .combined(with: .opacity)
+                                        .combined(with: .move(edge: .bottom)),
+                                    removal: .scale(scale: 0.85)
+                                        .combined(with: .opacity)
+                                        .combined(with: .move(edge: .trailing))
+                                ))
                             }
                         }
                         Color.clear.frame(height: 120)
@@ -70,8 +78,10 @@ struct ProjectsScreen: View {
             Button("Delete", role: .destructive) {
                 if let project = deletingProject {
                     unassignTasks(ofProjectId: project.id)
-                    modelContext.delete(project)
-                    try? modelContext.save()
+                    withAnimation(Motion.spring) {
+                        modelContext.delete(project)
+                        try? modelContext.save()
+                    }
                 }
                 deletingProject = nil
             }
@@ -136,8 +146,10 @@ private struct ProjectCard: View {
 
                         HStack(spacing: Spacing.s2) {
                             Text("\(openCount) open")
+                                .contentTransition(.numericText(value: Double(openCount)))
                             Circle().fill(palette.fg3).frame(width: 3, height: 3)
                             Text("\(doneCount) done")
+                                .contentTransition(.numericText(value: Double(doneCount)))
                         }
                         .font(.geist(size: 13, weight: 400))
                         .foregroundStyle(palette.fg3)

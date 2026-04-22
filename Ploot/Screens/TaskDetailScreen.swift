@@ -166,6 +166,7 @@ struct TaskDetailScreen: View {
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(palette.border).frame(height: 1)
                 }
+                .animation(Motion.spring, value: sub.done)
             }
         }
         .padding(.top, 28)

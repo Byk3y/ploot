@@ -75,13 +75,15 @@ struct DoneScreen: View {
     }
 
     private var streakCard: some View {
-        HStack(spacing: 14) {
+        let streak = TaskHelpers.streak(from: allTasks)
+        return HStack(spacing: 14) {
             Text("🔥")
                 .font(.system(size: 48))
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(TaskHelpers.streak(from: allTasks))")
+                Text("\(streak)")
                     .font(.fraunces(size: 34, weight: 600))
                     .foregroundStyle(palette.onPrimary)
+                    .contentTransition(.numericText(value: Double(streak)))
                 Text("day streak · don't break it")
                     .font(.geist(size: 13, weight: 500))
                     .foregroundStyle(palette.onPrimary.opacity(0.9))

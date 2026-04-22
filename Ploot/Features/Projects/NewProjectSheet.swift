@@ -281,6 +281,7 @@ struct NewProjectSheet: View {
             existing.emoji = emoji
             existing.tileColor = tileColor
             existing.touch()
+            try? modelContext.save()
         } else {
             let existingIds = Set(projects.map(\.id))
             let slug = Self.generateSlug(from: trimmed, existing: existingIds)
@@ -292,9 +293,13 @@ struct NewProjectSheet: View {
                 tileColor: tileColor,
                 order: nextOrder
             )
-            modelContext.insert(project)
+            // Animate insertion so the new card slides into the Projects list
+            // instead of popping when the user returns from the sheet.
+            withAnimation(Motion.spring) {
+                modelContext.insert(project)
+                try? modelContext.save()
+            }
         }
-        try? modelContext.save()
         onClose()
     }
 

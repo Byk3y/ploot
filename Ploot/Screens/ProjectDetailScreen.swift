@@ -118,8 +118,10 @@ struct ProjectDetailScreen: View {
                         .lineLimit(2)
                     HStack(spacing: Spacing.s2) {
                         Text("\(openCount) open")
+                            .contentTransition(.numericText(value: Double(openCount)))
                         Circle().fill(palette.fg3).frame(width: 3, height: 3)
                         Text("\(doneCount) done")
+                            .contentTransition(.numericText(value: Double(doneCount)))
                     }
                     .font(.geist(size: 13, weight: 400))
                     .foregroundStyle(palette.fg3)
