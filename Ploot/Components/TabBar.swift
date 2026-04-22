@@ -27,28 +27,54 @@ enum PlootTab: String, CaseIterable, Hashable {
 
 struct TabBar: View {
     @Binding var current: PlootTab
+    var onAdd: () -> Void = {}
 
     @Environment(\.plootPalette) private var palette
 
+    private static let fabSize: CGFloat = 60
+    /// How far the FAB sits above the tab bar's top border.
+    /// ~60% above, ~40% embedded — the "pushed through the bar" feel.
+    private static let fabLift: CGFloat = 36
+
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(PlootTab.allCases, id: \.self) { tab in
-                TabItem(tab: tab, active: current == tab) {
-                    withAnimation(Motion.spring) {
-                        current = tab
-                    }
-                }
-                .frame(maxWidth: .infinity)
+        ZStack(alignment: .top) {
+            // The bar itself — four tabs split 2/2 around the FAB slot.
+            HStack(spacing: 0) {
+                TabItem(tab: .today, active: current == .today, onTap: { select(.today) })
+                    .frame(maxWidth: .infinity)
+                TabItem(tab: .projects, active: current == .projects, onTap: { select(.projects) })
+                    .frame(maxWidth: .infinity)
+
+                // Reserve horizontal space for the FAB so the remaining icons
+                // stay evenly balanced on either side.
+                Color.clear.frame(width: Self.fabSize + 8)
+
+                TabItem(tab: .calendar, active: current == .calendar, onTap: { select(.calendar) })
+                    .frame(maxWidth: .infinity)
+                TabItem(tab: .done, active: current == .done, onTap: { select(.done) })
+                    .frame(maxWidth: .infinity)
             }
+            .padding(.horizontal, Spacing.s2)
+            .padding(.top, Spacing.s2)
+            .padding(.bottom, Spacing.s1)
+            .background(palette.bgElevated)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(palette.borderInk)
+                    .frame(height: 2)
+            }
+
+            // Docked FAB — straddles the top hairline with its stamped shadow
+            // landing on the bar surface. Raised above the bar's top edge.
+            FAB(action: onAdd)
+                .frame(width: Self.fabSize, height: Self.fabSize)
+                .offset(y: -Self.fabLift)
         }
-        .padding(.horizontal, Spacing.s2)
-        .padding(.top, Spacing.s2)
-        .padding(.bottom, Spacing.s1)
-        .background(palette.bgElevated)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(palette.borderInk)
-                .frame(height: 2)
+    }
+
+    private func select(_ tab: PlootTab) {
+        withAnimation(Motion.spring) {
+            current = tab
         }
     }
 }

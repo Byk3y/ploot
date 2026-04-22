@@ -12,18 +12,14 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                tabContent
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        TabBar(current: $tab)
-                    }
-
-                FAB(action: { quickAddOpen = true })
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 24)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-            .background(palette.bg.ignoresSafeArea())
+            tabContent
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    TabBar(
+                        current: $tab,
+                        onAdd: { quickAddOpen = true }
+                    )
+                }
+                .background(palette.bg.ignoresSafeArea())
             .navigationDestination(item: $openTask) { task in
                 TaskDetailScreen(store: store, taskId: task.id)
                     .navigationBarBackButtonHidden()
