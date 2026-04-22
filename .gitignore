@@ -37,6 +37,8 @@ Carthage/Build/
 # Env / secrets
 .env
 *.mobileprovision
+# Supabase project credentials — per-machine, never in the repo.
+Ploot/Secrets.swift
 
 # MCP server config — contains Supabase personal access token + project ref,
 # must never be committed. Each developer keeps their own .mcp.json locally.
