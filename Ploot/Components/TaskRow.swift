@@ -39,8 +39,11 @@ struct TaskRow: View {
 
                 Spacer(minLength: 0)
 
-                if task.priority == .urgent && !task.done {
-                    Text("🔥")
+                // Priority indicator — ⚡ medium, ❗ high, 🔥 urgent. Hidden
+                // on done tasks so the list doesn't scream at you about
+                // things you've already crushed.
+                if !task.priority.emoji.isEmpty && !task.done {
+                    Text(task.priority.emoji)
                         .font(.system(size: 14))
                 }
             }
