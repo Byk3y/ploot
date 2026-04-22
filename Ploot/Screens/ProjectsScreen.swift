@@ -5,6 +5,7 @@ struct ProjectsScreen: View {
     @Query(sort: \PlootProject.order) private var projects: [PlootProject]
     @Query private var allTasks: [PlootTask]
 
+    @State private var newProjectOpen: Bool = false
     @Environment(\.plootPalette) private var palette
 
     var body: some View {
@@ -12,17 +13,26 @@ struct ProjectsScreen: View {
             title: "Projects",
             subtitle: "Where the plans live.",
             trailing: {
-                HeaderButton(systemImage: "plus", action: {})
+                HeaderButton(systemImage: "plus", action: { newProjectOpen = true })
             },
             content: {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(projects) { project in
-                            ProjectCard(
-                                project: project,
-                                openCount: openCount(for: project),
-                                doneCount: doneCount(for: project)
+                        if projects.isEmpty {
+                            EmptyState(
+                                systemImage: "folder.badge.plus",
+                                title: "No projects yet.",
+                                subtitle: "Tap the + up top to spin up your first one."
                             )
+                            .padding(.top, Spacing.s8)
+                        } else {
+                            ForEach(projects) { project in
+                                ProjectCard(
+                                    project: project,
+                                    openCount: openCount(for: project),
+                                    doneCount: doneCount(for: project)
+                                )
+                            }
                         }
                         Color.clear.frame(height: 120)
                     }
@@ -31,6 +41,12 @@ struct ProjectsScreen: View {
                 }
             }
         )
+        .sheet(isPresented: $newProjectOpen) {
+            NewProjectSheet(onClose: { newProjectOpen = false })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(28)
+        }
     }
 
     private func openCount(for project: PlootProject) -> Int {
