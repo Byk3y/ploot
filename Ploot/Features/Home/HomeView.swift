@@ -12,18 +12,22 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                tabContent
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        TabBar(current: $tab)
-                    }
-
-                FAB(action: { quickAddOpen = true })
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 24)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-            .background(palette.bg.ignoresSafeArea())
+            tabContent
+                .overlay(alignment: .bottomTrailing) {
+                    // Ordering matters: this overlay is applied to tabContent
+                    // *before* .safeAreaInset. That anchors the FAB to the
+                    // bottom of the content area, which is the top of the
+                    // TabBar — so it floats 12pt above the bar instead of
+                    // over it, regardless of device safe-area size.
+                    FAB(action: { quickAddOpen = true })
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 12)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    TabBar(current: $tab)
+                }
+                .background(palette.bg.ignoresSafeArea())
             .navigationDestination(item: $openTask) { task in
                 TaskDetailScreen(store: store, taskId: task.id)
                     .navigationBarBackButtonHidden()
