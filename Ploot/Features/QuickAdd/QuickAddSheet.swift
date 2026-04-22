@@ -5,6 +5,9 @@ struct QuickAddSheet: View {
     /// When non-nil, the sheet is in edit mode: fields are prefilled from
     /// this task and Save mutates it in place instead of inserting a new row.
     let existingTask: PlootTask?
+    /// Pre-selects a project when creating a new task. Ignored when
+    /// `existingTask` is set (the task's own projectId wins).
+    let initialProjectId: String?
     var onClose: () -> Void
 
     @Environment(\.plootPalette) private var palette
@@ -24,14 +27,20 @@ struct QuickAddSheet: View {
     @State private var placeholderIndex: Int = Int.random(in: 0..<placeholders.count)
     @FocusState private var titleFocused: Bool
 
-    init(existingTask: PlootTask? = nil, onClose: @escaping () -> Void) {
+    init(
+        existingTask: PlootTask? = nil,
+        initialProjectId: String? = nil,
+        onClose: @escaping () -> Void
+    ) {
         self.existingTask = existingTask
+        self.initialProjectId = initialProjectId
         self.onClose = onClose
 
-        // Prefill from the task when editing; blank defaults when creating.
+        // Prefill from the task when editing; otherwise fall back to the
+        // initialProjectId caller hint, then the inbox sentinel.
         _title = State(initialValue: existingTask?.title ?? "")
         _note = State(initialValue: existingTask?.note ?? "")
-        _projectId = State(initialValue: existingTask?.projectId ?? "inbox")
+        _projectId = State(initialValue: existingTask?.projectId ?? initialProjectId ?? "inbox")
         _priority = State(initialValue: existingTask?.priority ?? .normal)
         _due = State(initialValue: DueOption.fromDate(existingTask?.dueDate))
         _time = State(initialValue: Self.extractTimeSlot(from: existingTask?.dueDate))
