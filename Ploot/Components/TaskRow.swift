@@ -58,19 +58,20 @@ struct TaskRow: View {
     }
 
     private var hasMeta: Bool {
-        task.due != nil || task.projectId != nil || !task.tags.isEmpty
+        TaskHelpers.displayLabel(for: task) != nil || task.projectId != nil || !task.tags.isEmpty
     }
 
     private var metaRow: some View {
         HStack(spacing: 6) {
-            if let due = task.due {
+            if let dueLabel = TaskHelpers.displayLabel(for: task) {
+                let isOverdue = TaskHelpers.derivedSection(for: task) == .overdue
                 HStack(spacing: 3) {
                     Image(systemName: "calendar")
                         .font(.system(size: 10, weight: .semibold))
-                    Text(due)
+                    Text(dueLabel)
                         .font(.geist(size: 12, weight: 500))
                 }
-                .foregroundStyle(task.overdue ? palette.danger : palette.fg2)
+                .foregroundStyle(isOverdue ? palette.danger : palette.fg2)
             }
 
             if let project {

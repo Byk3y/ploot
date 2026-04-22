@@ -64,23 +64,26 @@ struct DoneScreen: View {
     }
 
     private var weeklyChart: some View {
-        let labels = ["M", "T", "W", "T", "F", "S", "S"]
-        let counts = TaskHelpers.weeklyCounts(from: allTasks)
+        let buckets = TaskHelpers.weeklyCounts(from: allTasks)
+        let maxCount = max(buckets.map(\.count).max() ?? 0, 1)
         return HStack(alignment: .bottom, spacing: Spacing.s2) {
-            ForEach(Array(counts.enumerated()), id: \.offset) { i, n in
-                let isToday = i == counts.count - 1
+            ForEach(buckets) { bucket in
                 VStack(spacing: 4) {
+                    // Height scales proportionally to the tallest bar so the
+                    // chart reads even on a quiet week. Floor at 12pt so zero
+                    // counts still render as a visible stub.
+                    let normalized = CGFloat(bucket.count) / CGFloat(maxCount)
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isToday ? palette.primary : palette.clay200)
-                        .frame(height: CGFloat(n) * 10 + 12)
+                        .fill(bucket.isToday ? palette.primary : palette.clay200)
+                        .frame(height: normalized * 64 + 12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .strokeBorder(palette.borderInk, lineWidth: 2)
                         )
 
-                    Text(labels[i])
-                        .font(.jetBrainsMono(size: 11, weight: isToday ? 700 : 500))
-                        .foregroundStyle(isToday ? palette.fg1 : palette.fg3)
+                    Text(bucket.label)
+                        .font(.jetBrainsMono(size: 11, weight: bucket.isToday ? 700 : 500))
+                        .foregroundStyle(bucket.isToday ? palette.fg1 : palette.fg3)
                 }
                 .frame(maxWidth: .infinity)
             }

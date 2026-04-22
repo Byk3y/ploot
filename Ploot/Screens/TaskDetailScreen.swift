@@ -62,8 +62,8 @@ struct TaskDetailScreen: View {
 
     private var chipRow: some View {
         FlowLayout(spacing: 8) {
-            if let due = task.due {
-                Chip(text: due, color: .clay, icon: "calendar")
+            if let dueLabel = TaskHelpers.displayLabel(for: task) {
+                Chip(text: dueLabel, color: .clay, icon: "calendar")
             }
             if let project = TaskHelpers.project(id: task.projectId, from: projects) {
                 Chip(text: project.name, color: .sky, icon: "folder")
@@ -103,7 +103,7 @@ struct TaskDetailScreen: View {
                     PlootCheckbox(
                         checked: sub.done,
                         size: 20,
-                        onToggle: { _ in sub.done.toggle() }
+                        onToggle: { sub.setDone($0) }
                     )
                     Text(sub.title)
                         .font(.geist(size: 14, weight: 400))
