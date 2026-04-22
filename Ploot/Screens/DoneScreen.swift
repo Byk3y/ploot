@@ -40,6 +40,10 @@ struct DoneScreen: View {
                                 onEdit: { editingTask = task },
                                 onDelete: { deletingTask = task }
                             )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
                         }
                     }
                     Color.clear.frame(height: 120)

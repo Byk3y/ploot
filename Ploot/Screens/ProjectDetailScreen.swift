@@ -166,6 +166,10 @@ struct ProjectDetailScreen: View {
                             onEdit: { editingTask = task },
                             onDelete: { deletingTask = task }
                         )
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                     }
                 } header: {
                     SectionHeader(title: "Tasks", count: tasks.count)

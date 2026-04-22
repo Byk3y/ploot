@@ -91,9 +91,31 @@ tabContent
 
 If the owner flags a layout bug, the first move is a modifier reorder, not a redesign. Don't propose swapping the pattern (dock the FAB, go liquid-glass, etc.) unless the geometry fix has already been tried.
 
-### Springs: bouncy, not stiff
+### Animation: take the opportunity, favor bouncy springs
 
-All motion uses `Motion.spring` (response 0.38, damping 0.62) or `Motion.springFast`. The brand is playful; do not use `.linear` or tight-damping springs for UI state. Press-collapse animations on buttons use `Motion.springFast`. Tab-icon scale uses `Motion.spring`.
+This is a native iOS app — **motion is the product's personality**. Every meaningful state change should feel animated, not teleported. When you touch a view that changes state, ask "would this feel more alive with motion?" before shipping. The answer is usually yes.
+
+**Springs are the default timing.** All motion uses `Motion.spring` (response 0.38, damping 0.62) or `Motion.springFast`. The brand is playful. Don't use `.linear` or tight-damping springs for UI state. Press-collapse animations on buttons use `Motion.springFast`. Tab-icon scale uses `Motion.spring`. Reserve `.easeOut` for fade-only cases.
+
+**Opportunities you should look for and act on:**
+- **Rows entering or leaving a list** (filter changes, deletions, check-offs, section moves). Add `.transition(.asymmetric(insertion: .move(edge: X).combined(with: .opacity), removal: .move(edge: Y).combined(with: .opacity)))` on the row inside the `ForEach`. Think about directionality: forward progress slides trailing, going-back slides leading.
+- **Filter-driven re-renders from `@Query`.** Wrap the triggering mutation in `withAnimation(Motion.spring) { … }` so SwiftUI animates the list rearrangement instead of snapping.
+- **Sheet + navigation transitions.** iOS defaults are fine; don't override unless you have a reason.
+- **Toggle state changes.** Reach for `.symbolEffect`, `.matchedGeometryEffect`, or a local spring — anything but a pop.
+- **Expand / collapse.** `.transition(.opacity.combined(with: .move(edge: .top)))` on the disclosed content.
+- **Tab / selection changes.** Scale + translate subtly; see `TabBar` active-icon scale for the pattern.
+
+**The "predictive visual + delayed mutation + exit transition" template.** Used for task check-off; reuse the shape whenever a state change would otherwise feel too instant:
+1. Flip a local `@State` flag (e.g. `justCompleted`) **immediately** on user action so the visual state is predictive (strikethrough, dimmed, whatever represents the new state).
+2. Delay the actual model mutation ~400–600ms so the user sees the completed state register before the view leaves the hierarchy.
+3. When the delay fires, commit inside `withAnimation(Motion.spring) { … }`.
+4. A `.transition(...)` on the `ForEach` row handles the slide-out.
+
+`TaskRow.handleToggle` is the reference implementation; see `Ploot/Components/TaskRow.swift`.
+
+**Don't over-animate.** Tiny hover-ish jitters on every tap make the app feel busy. Animate *state transitions* — done/undone, filter in/out, push/pop, expand/collapse, appear/dismiss. Don't animate every paint tick.
+
+**Clean builds still don't prove motion is right.** A green `xcodebuild` only means the animation compiles. Ask the owner to verify on-device whenever you add or change a motion — physical devices are where spring feel actually lives.
 
 ## Content + tone rules
 
