@@ -460,11 +460,12 @@ struct QuickAddSheet: View {
             existing.priority = priority
             existing.repeats = resolvedRepeats
             existing.remindMe = remindMe
-            // Replace the subtasks list: delete the ones that were removed,
-            // reuse the ones still present, insert the new ones.
+            // Replace the subtasks list: tombstone the ones that were
+            // removed (so sync can propagate the delete), keep the ones
+            // still present, insert the new ones.
             let keptIds = Set(subtasks.map(\.id))
             for old in existing.subtasks where !keptIds.contains(old.id) {
-                modelContext.delete(old)
+                old.softDelete()
             }
             existing.subtasks = subtasks
             existing.touch()
@@ -486,6 +487,12 @@ struct QuickAddSheet: View {
             savedTask = task
         }
         try? modelContext.save()
+
+        // Push the mutation upstream. push(task:) upserts the task then
+        // its live subtasks sequentially, so the FK-ordered flow is
+        // handled inside SyncService. No separate subtask pushes needed
+        // here.
+        SyncService.shared.push(task: savedTask)
 
         // Re-sync the notification. The service is idempotent — cancels any
         // existing request for this task then schedules a fresh one if the

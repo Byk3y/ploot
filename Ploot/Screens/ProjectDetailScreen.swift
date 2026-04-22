@@ -22,7 +22,7 @@ struct ProjectDetailScreen: View {
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        let tasks = allTasks.filter { $0.projectId == project.id }
+        let tasks = allTasks.filter { $0.isLive && $0.projectId == project.id }
         return ScreenFrame(
             leading: {
                 HeaderButton(systemImage: "arrow.left") { dismiss() }
@@ -77,7 +77,7 @@ struct ProjectDetailScreen: View {
             Button("Delete", role: .destructive) {
                 if let task = deletingTask {
                     ReminderService.shared.cancel(for: task)
-                    modelContext.delete(task)
+                    task.softDelete()
                     try? modelContext.save()
                 }
                 deletingTask = nil
@@ -220,15 +220,16 @@ struct ProjectDetailScreen: View {
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             // Mirror Supabase's ON DELETE SET NULL: null out projectId on any
-            // task that referenced this project, then delete the project
-            // itself. Tasks keep all other content.
+            // task that referenced this project, then soft-delete the
+            // project itself. Tasks keep all other content and sync
+            // continues to push/pull them.
             let fetch = FetchDescriptor<PlootTask>()
             let tasks = (try? modelContext.fetch(fetch)) ?? []
             for task in tasks where task.projectId == idToDelete {
                 task.projectId = nil
                 task.touch()
             }
-            modelContext.delete(projectToDelete)
+            projectToDelete.softDelete()
             try? modelContext.save()
         }
     }

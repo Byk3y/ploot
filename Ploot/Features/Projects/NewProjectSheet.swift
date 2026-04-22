@@ -275,6 +275,7 @@ struct NewProjectSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, !emoji.isEmpty else { return }
 
+        let savedProject: PlootProject
         if let existing = existingProject {
             // In-place update. id + order stay as they were.
             existing.name = trimmed
@@ -282,6 +283,7 @@ struct NewProjectSheet: View {
             existing.tileColor = tileColor
             existing.touch()
             try? modelContext.save()
+            savedProject = existing
         } else {
             let existingIds = Set(projects.map(\.id))
             let slug = Self.generateSlug(from: trimmed, existing: existingIds)
@@ -299,7 +301,9 @@ struct NewProjectSheet: View {
                 modelContext.insert(project)
                 try? modelContext.save()
             }
+            savedProject = project
         }
+        SyncService.shared.push(project: savedProject)
         onClose()
     }
 

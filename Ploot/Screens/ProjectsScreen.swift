@@ -24,7 +24,8 @@ struct ProjectsScreen: View {
             content: {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        if projects.isEmpty {
+                        let liveProjects = projects.filter { $0.isLive }
+                        if liveProjects.isEmpty {
                             EmptyState(
                                 systemImage: "folder.badge.plus",
                                 title: "No projects yet.",
@@ -32,7 +33,7 @@ struct ProjectsScreen: View {
                             )
                             .padding(.top, Spacing.s8)
                         } else {
-                            ForEach(projects) { project in
+                            ForEach(liveProjects) { project in
                                 ProjectCard(
                                     project: project,
                                     openCount: openCount(for: project),
@@ -79,7 +80,7 @@ struct ProjectsScreen: View {
                 if let project = deletingProject {
                     unassignTasks(ofProjectId: project.id)
                     withAnimation(Motion.spring) {
-                        modelContext.delete(project)
+                        project.softDelete()
                         try? modelContext.save()
                     }
                 }
@@ -91,11 +92,11 @@ struct ProjectsScreen: View {
     }
 
     private func openCount(for project: PlootProject) -> Int {
-        allTasks.filter { $0.projectId == project.id && !$0.done }.count
+        allTasks.filter { $0.isLive && $0.projectId == project.id && !$0.done }.count
     }
 
     private func doneCount(for project: PlootProject) -> Int {
-        allTasks.filter { $0.projectId == project.id && $0.done }.count
+        allTasks.filter { $0.isLive && $0.projectId == project.id && $0.done }.count
     }
 
     /// Mirror Supabase's ON DELETE SET NULL: any task referencing the

@@ -81,10 +81,11 @@ struct TaskDetailScreen: View {
         let taskToDelete = task
         ReminderService.shared.cancel(for: taskToDelete)
         dismiss()
-        // Let the view unmount before freeing the model instance so the
-        // @Bindable @Model doesn't read deleted properties on its way out.
+        // Let the view unmount before we mutate the @Bindable @Model
+        // so the disappearing detail screen doesn't re-render against
+        // a half-deleted row.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            modelContext.delete(taskToDelete)
+            taskToDelete.softDelete()
             try? modelContext.save()
         }
     }
@@ -139,7 +140,7 @@ struct TaskDetailScreen: View {
 
     private var subtasksSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            let sorted = task.subtasks.sorted { $0.order < $1.order }
+            let sorted = task.subtasks.filter { $0.isLive }.sorted { $0.order < $1.order }
             let doneCount = sorted.filter { $0.done }.count
             Text("Sub-tasks · \(doneCount)/\(sorted.count)")
                 .font(.jetBrainsMono(size: 11, weight: 600))

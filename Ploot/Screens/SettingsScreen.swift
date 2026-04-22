@@ -314,13 +314,21 @@ struct SettingsScreen: View {
     }
 
     private func wipeAllData() {
-        // Cancel every pending reminder first so nothing orphaned fires
-        // after the underlying task row is gone.
+        // Soft-delete everything. softDelete() tombstones + pushes to
+        // Supabase so the deletion propagates to other devices. Hard
+        // delete would just get re-pulled on the next foreground.
         for task in allTasks {
             ReminderService.shared.cancel(for: task)
+            for sub in task.subtasks where sub.isLive {
+                sub.softDelete()
+            }
+            if task.isLive {
+                task.softDelete()
+            }
         }
-        for task in allTasks { modelContext.delete(task) }
-        for project in allProjects { modelContext.delete(project) }
+        for project in allProjects where project.isLive {
+            project.softDelete()
+        }
         try? modelContext.save()
     }
 
