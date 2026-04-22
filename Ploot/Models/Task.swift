@@ -108,6 +108,10 @@ final class PlootTask {
     var section: TaskSection
     var overdue: Bool
     var repeats: String?
+    /// When true, a local notification is scheduled for this task's
+    /// `dueDate`. Optional so adding this column is a clean lightweight
+    /// migration — existing rows read as nil (treated as false).
+    var remindMe: Bool?
     var createdAt: Date
     var completedAt: Date?
     /// Bumped on every mutation — basis for last-write-wins conflict
@@ -129,7 +133,8 @@ final class PlootTask {
         done: Bool = false,
         section: TaskSection = .today,
         overdue: Bool = false,
-        repeats: String? = nil
+        repeats: String? = nil,
+        remindMe: Bool = false
     ) {
         self.id = UUID()
         self.title = title
@@ -145,6 +150,7 @@ final class PlootTask {
         self.section = section
         self.overdue = overdue
         self.repeats = repeats
+        self.remindMe = remindMe
         let now = Date()
         self.createdAt = now
         self.completedAt = done ? now : nil
@@ -152,7 +158,9 @@ final class PlootTask {
     }
 
     /// Apply a done/undone toggle with the side-effects needed for UI to
-    /// stay consistent (section, timestamps).
+    /// stay consistent (section, timestamps). Also re-syncs the task's
+    /// local reminder — marking done cancels any pending notification;
+    /// un-marking may re-schedule if a future dueDate is still set.
     func setDone(_ value: Bool) {
         done = value
         if value {
@@ -165,6 +173,7 @@ final class PlootTask {
             }
         }
         touch()
+        Task { @MainActor in ReminderService.shared.schedule(for: self) }
     }
 
     /// Bump `updatedAt` to now. Call after any mutation that should flow up

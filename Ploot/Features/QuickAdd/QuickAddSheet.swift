@@ -44,7 +44,7 @@ struct QuickAddSheet: View {
         _priority = State(initialValue: existingTask?.priority ?? .normal)
         _due = State(initialValue: DueOption.fromDate(existingTask?.dueDate))
         _time = State(initialValue: Self.extractTimeSlot(from: existingTask?.dueDate))
-        _remindMe = State(initialValue: false) // not stored on the model yet
+        _remindMe = State(initialValue: existingTask?.remindMe ?? false)
         _repeats = State(initialValue: RepeatOption.fromStored(existingTask?.repeats))
         _subtasks = State(initialValue: existingTask?.subtasks.sorted { $0.order < $1.order } ?? [])
     }
@@ -448,6 +448,7 @@ struct QuickAddSheet: View {
         let resolvedRepeats: String? = repeats == .never ? nil : repeats.rawValue
         let resolvedNote: String? = note.isEmpty ? nil : note
 
+        let savedTask: PlootTask
         if let existing = existingTask {
             // Update in place. Keep createdAt/completedAt/done untouched —
             // those are managed by TaskRow/detail-screen toggles, not this sheet.
@@ -458,6 +459,7 @@ struct QuickAddSheet: View {
             existing.projectId = resolvedProjectId
             existing.priority = priority
             existing.repeats = resolvedRepeats
+            existing.remindMe = remindMe
             // Replace the subtasks list: delete the ones that were removed,
             // reuse the ones still present, insert the new ones.
             let keptIds = Set(subtasks.map(\.id))
@@ -466,6 +468,7 @@ struct QuickAddSheet: View {
             }
             existing.subtasks = subtasks
             existing.touch()
+            savedTask = existing
         } else {
             let task = PlootTask(
                 title: trimmed,
@@ -476,11 +479,28 @@ struct QuickAddSheet: View {
                 priority: priority,
                 subtasks: subtasks,
                 section: .today,
-                repeats: resolvedRepeats
+                repeats: resolvedRepeats,
+                remindMe: remindMe
             )
             modelContext.insert(task)
+            savedTask = task
         }
         try? modelContext.save()
+
+        // Re-sync the notification. The service is idempotent — cancels any
+        // existing request for this task then schedules a fresh one if the
+        // task still wants a reminder in the future.
+        if remindMe {
+            Task {
+                _ = await ReminderService.shared.requestAuthorizationIfNeeded()
+                await MainActor.run {
+                    ReminderService.shared.schedule(for: savedTask)
+                }
+            }
+        } else {
+            ReminderService.shared.cancel(for: savedTask)
+        }
+
         onClose()
     }
 

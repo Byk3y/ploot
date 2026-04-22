@@ -79,6 +79,7 @@ struct TaskDetailScreen: View {
 
     private func performDelete() {
         let taskToDelete = task
+        ReminderService.shared.cancel(for: taskToDelete)
         dismiss()
         // Let the view unmount before freeing the model instance so the
         // @Bindable @Model doesn't read deleted properties on its way out.

@@ -35,6 +35,7 @@ struct TodayScreen: View {
             Button("Cancel", role: .cancel) { deletingTask = nil }
             Button("Delete", role: .destructive) {
                 if let task = deletingTask {
+                    ReminderService.shared.cancel(for: task)
                     modelContext.delete(task)
                     try? modelContext.save()
                 }
