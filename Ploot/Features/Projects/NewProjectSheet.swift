@@ -5,21 +5,35 @@ import SwiftData
 /// tile color — plus a live preview of the resulting Projects card so the
 /// user can see what they're about to make.
 struct NewProjectSheet: View {
+    /// When non-nil, the sheet is in edit mode: fields prefill from this
+    /// project and Save mutates it in place instead of inserting. The slug
+    /// `id` stays locked — changing it would orphan every task that
+    /// references the project via `projectId`.
+    let existingProject: PlootProject?
     var onClose: () -> Void
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PlootProject.order) private var projects: [PlootProject]
 
-    @State private var name: String = ""
-    @State private var emoji: String = "💼"
-    @State private var tileColor: ProjectTileColor = .sky
+    @State private var name: String
+    @State private var emoji: String
+    @State private var tileColor: ProjectTileColor
     @FocusState private var nameFocused: Bool
 
+    init(existingProject: PlootProject? = nil, onClose: @escaping () -> Void) {
+        self.existingProject = existingProject
+        self.onClose = onClose
+        _name = State(initialValue: existingProject?.name ?? "")
+        _emoji = State(initialValue: existingProject?.emoji ?? "💼")
+        _tileColor = State(initialValue: existingProject?.tileColor ?? .sky)
+    }
+
     /// Curated starters drawn from the brief ("Projects use emoji 💼🏡🚀🛒📚")
-    /// plus a few more in the same register. User can type any emoji via the
-    /// iOS keyboard's globe key in the custom-emoji field below the grid.
-    private let emojiSuggestions = ["💼", "🏡", "🚀", "🛒", "📚", "🎯", "🎨", "🌱", "💪", "🍳"]
+    /// plus a few more in the same register. Nine tiles — the tenth slot in
+    /// the 5×2 grid is the "pick any emoji" tile that invokes the native
+    /// emoji keyboard.
+    private let emojiSuggestions = ["💼", "🏡", "🚀", "🛒", "📚", "🎯", "🎨", "🌱", "💪"]
     private let colorOptions: [ProjectTileColor] = [.sky, .forest, .plum, .butter, .primary, .inbox]
 
     var body: some View {
@@ -40,7 +54,11 @@ struct NewProjectSheet: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .background(palette.bg.ignoresSafeArea())
-        .onAppear { nameFocused = true }
+        .onAppear {
+            // Only autofocus in create mode — edit mode leaves focus off so
+            // the user can tweak any field without dismissing the keyboard.
+            if existingProject == nil { nameFocused = true }
+        }
     }
 
     // MARK: - Top bar
@@ -53,7 +71,7 @@ struct NewProjectSheet: View {
 
             Spacer()
 
-            Text("New project")
+            Text(existingProject == nil ? "New project" : "Edit project")
                 .font(.fraunces(size: 20, weight: 600, opsz: 20, soft: 80))
                 .foregroundStyle(palette.fg1)
 
@@ -140,10 +158,42 @@ struct NewProjectSheet: View {
                 ForEach(emojiSuggestions, id: \.self) { candidate in
                     emojiTile(candidate)
                 }
+                moreEmojiTile
             }
-
-            customEmojiField
         }
+    }
+
+    /// The tenth tile. If the user has picked a custom emoji (one not in
+    /// `emojiSuggestions`) it's shown here with selected-tile styling;
+    /// otherwise a face.smiling icon hints that tapping opens the emoji
+    /// keyboard. The EmojiTextField sits invisibly on top and catches
+    /// taps — becoming first responder triggers the native picker.
+    private var moreEmojiTile: some View {
+        let isCustom = !emojiSuggestions.contains(emoji) && !emoji.isEmpty
+        return ZStack {
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                .fill(isCustom ? palette.primary.opacity(0.18) : palette.bgElevated)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .strokeBorder(isCustom ? palette.primary : palette.border, lineWidth: 2)
+                )
+
+            EmojiTextField(text: $emoji, hidesCursor: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Group {
+                if isCustom {
+                    Text(emoji).font(.system(size: 24))
+                } else {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(palette.fg3)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .sensoryFeedback(.selection, trigger: emoji)
     }
 
     private func emojiTile(_ candidate: String) -> some View {
@@ -167,36 +217,6 @@ struct NewProjectSheet: View {
         .sensoryFeedback(.selection, trigger: selected)
     }
 
-    private var customEmojiField: some View {
-        // SwiftUI TextField accepts any emoji the user types via the globe
-        // key. We truncate to the last grapheme so re-editing just swaps
-        // the character instead of accumulating a string.
-        HStack(spacing: Spacing.s2) {
-            Image(systemName: "face.smiling")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(palette.fg3)
-            TextField("or type any emoji", text: $emoji)
-                .font(.system(size: 18))
-                .foregroundStyle(palette.fg1)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onChange(of: emoji) { _, new in
-                    if new.count > 1, let last = new.last {
-                        emoji = String(last)
-                    }
-                }
-        }
-        .padding(.horizontal, Spacing.s3)
-        .padding(.vertical, Spacing.s2)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                .fill(palette.bgSunken)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                .strokeBorder(palette.border, lineWidth: 1)
-        )
-    }
 
     // MARK: - Color
 
@@ -255,18 +275,25 @@ struct NewProjectSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, !emoji.isEmpty else { return }
 
-        let existingIds = Set(projects.map(\.id))
-        let slug = Self.generateSlug(from: trimmed, existing: existingIds)
-        let nextOrder = (projects.map(\.order).max() ?? 0) + 1
-
-        let project = PlootProject(
-            id: slug,
-            name: trimmed,
-            emoji: emoji,
-            tileColor: tileColor,
-            order: nextOrder
-        )
-        modelContext.insert(project)
+        if let existing = existingProject {
+            // In-place update. id + order stay as they were.
+            existing.name = trimmed
+            existing.emoji = emoji
+            existing.tileColor = tileColor
+            existing.touch()
+        } else {
+            let existingIds = Set(projects.map(\.id))
+            let slug = Self.generateSlug(from: trimmed, existing: existingIds)
+            let nextOrder = (projects.map(\.order).max() ?? 0) + 1
+            let project = PlootProject(
+                id: slug,
+                name: trimmed,
+                emoji: emoji,
+                tileColor: tileColor,
+                order: nextOrder
+            )
+            modelContext.insert(project)
+        }
         try? modelContext.save()
         onClose()
     }
