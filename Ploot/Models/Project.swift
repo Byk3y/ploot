@@ -1,24 +1,38 @@
 import Foundation
+import SwiftData
 import SwiftUI
 
-struct PlootProject: Identifiable, Hashable {
-    let id: String
-    let name: String
-    let emoji: String
-    let tileColor: ProjectTileColor
-    var openCount: Int
-    var doneCount: Int
+/// Persisted project. `id` is a human-readable slug ("work", "home", etc.)
+/// so tasks can reference it via `projectId: String?` without carrying a
+/// full PersistentIdentifier through the codebase.
+@Model
+final class PlootProject {
+    @Attribute(.unique) var id: String
+    var name: String
+    var emoji: String
+    var tileColor: ProjectTileColor
+    /// Display ordering in the Projects screen list.
+    var order: Int
+
+    init(
+        id: String,
+        name: String,
+        emoji: String,
+        tileColor: ProjectTileColor,
+        order: Int = 0
+    ) {
+        self.id = id
+        self.name = name
+        self.emoji = emoji
+        self.tileColor = tileColor
+        self.order = order
+    }
 }
 
-/// Token-backed color choices for project tiles. Resolved against the current
-/// palette so the same project shifts appropriately between light and cocoa.
-enum ProjectTileColor: Hashable {
-    case sky
-    case forest
-    case plum
-    case butter
-    case primary
-    case inbox
+/// Token-backed color choices for project tiles. Raw-String so SwiftData
+/// can persist it directly.
+enum ProjectTileColor: String, Codable, CaseIterable {
+    case sky, forest, plum, butter, primary, inbox
 
     func fill(palette: PlootPalette) -> Color {
         switch self {
@@ -31,8 +45,8 @@ enum ProjectTileColor: Hashable {
         }
     }
 
-    /// Dot / swatch color for contexts where tileColor would be too bright
-    /// (e.g. a 6px dot next to meta text).
+    /// Dot / swatch color for contexts where `fill` would be too bright
+    /// (e.g. a 6pt dot next to meta text).
     func dot(palette: PlootPalette) -> Color {
         switch self {
         case .butter: return palette.butter500
