@@ -113,6 +113,8 @@ private struct RootView: View {
                     await SyncService.shared.stopRealtime()
                     try? await Task.sleep(for: .milliseconds(300))
                     SyncService.shared.wipeLocal(context: modelContext)
+                    ReminderService.shared.cancelDailyCheckin()
+                    UserPrefs.wipe()
                     onboardingCompleted = false
                 }
             }

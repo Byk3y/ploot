@@ -73,12 +73,22 @@ final class OnboardingAnswers {
     var trackStreak: Bool = true
 
     // MARK: - Act 5 plan reveal
-    var seedStarterProjects: Bool = true
+
+    /// Slugs the user has opted into seeding on sign-in. Populated lazily
+    /// on screen 19 with every suggestion selected by default — user can
+    /// deselect individually. Empty = "start blank."
+    var selectedStarterSlugs: Set<String> = []
 
     /// Starter project suggestions derived from `primaryRole`. Used to
     /// preview on screen 19 and to seed on sign-in (Phase E).
     var suggestedProjects: [StarterProject] {
         StarterProject.suggestions(for: primaryRole)
+    }
+
+    /// Projects actually seeded after SIWA — the intersection of the
+    /// role-suggested list and the user's per-card selection.
+    var projectsToSeed: [StarterProject] {
+        suggestedProjects.filter { selectedStarterSlugs.contains($0.slug) }
     }
 
     private static func defaultCheckin() -> Date {

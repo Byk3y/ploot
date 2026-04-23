@@ -122,7 +122,7 @@ struct CheckinTimeScreen: View {
                     title: "When should we check in?",
                     subtitle: chronotypeHint
                 )
-                TimePickerCard(time: $answers.checkinTime)
+                PlootTimePicker(time: $answers.checkinTime)
                 Text("We'll send one nudge at this time — not every five minutes. Pinky promise.")
                     .font(.geist(size: 13, weight: 400))
                     .foregroundStyle(palette.fg3)

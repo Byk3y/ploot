@@ -204,6 +204,9 @@ final class PlootTask {
         touch()
         ReminderService.shared.schedule(for: self)
         SyncService.shared.push(task: self)
+        if value, let ctx = self.modelContext {
+            StreakManager.bumpIfGoalHit(context: ctx)
+        }
     }
 
     /// Bump `updatedAt` to now. Call after any mutation that should flow up

@@ -145,6 +145,10 @@ struct PostPurchaseAuthScreen: View {
     // MARK: - Push onboarding + seed starter projects
 
     private func pushAnswersAndSeed() async {
+        // Mirror answers into @AppStorage first — even if the network
+        // push fails, the app can still personalize offline.
+        UserPrefs.apply(from: answers)
+
         do {
             try await SyncService.shared.pushOnboarding(answers: answers, userId: session.currentUser?.id)
         } catch {
@@ -153,15 +157,15 @@ struct PostPurchaseAuthScreen: View {
             print("[Onboarding] pushOnboarding failed: \(error)")
             #endif
         }
-        if answers.seedStarterProjects {
+        if !answers.projectsToSeed.isEmpty {
             await seedStarterProjects()
         }
     }
 
     @MainActor
     private func seedStarterProjects() async {
-        let suggestions = answers.suggestedProjects
-        for (idx, sp) in suggestions.enumerated() {
+        let toSeed = answers.projectsToSeed
+        for (idx, sp) in toSeed.enumerated() {
             // Skip if a project with this slug already exists locally
             // (defensive: shouldn't happen on fresh sign-in, but avoids
             // a unique-constraint crash if realtime sync already pulled
@@ -263,6 +267,7 @@ struct NotificationsScreen: View {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             if granted {
                 await OnboardingNotifications.scheduleTrialReminder()
+                ReminderService.shared.scheduleDailyCheckin()
             }
         } catch {
             #if DEBUG
@@ -275,6 +280,11 @@ struct NotificationsScreen: View {
     private func scheduleOnlyThenAdvance() {
         Task {
             await OnboardingNotifications.scheduleTrialReminder()
+            // Even if the user skipped the permission prompt, schedule
+            // the daily check-in — it's harmless when permission was
+            // never granted (iOS silently no-ops) and will start firing
+            // as soon as they grant permission later from Settings.
+            ReminderService.shared.scheduleDailyCheckin()
             onComplete()
         }
     }
@@ -287,38 +297,58 @@ struct LandScreen: View {
 
     @Environment(\.plootPalette) private var palette
     @State private var entered: Bool = false
+    @State private var ctaVisible: Bool = false
 
     var body: some View {
-        ZStack {
-            palette.bg.ignoresSafeArea()
+        VStack(spacing: 0) {
+            Spacer()
 
-            VStack(spacing: Spacing.s6) {
-                Text("🧡")
-                    .font(.system(size: 88))
-                    .scaleEffect(entered ? 1.0 : 0.4)
-                    .opacity(entered ? 1 : 0)
-
-                VStack(spacing: Spacing.s2) {
-                    Text("You're in.")
-                        .font(.fraunces(size: 36, weight: 600, opsz: 144, soft: 50))
-                        .tracking(-0.02 * 36)
-                        .foregroundStyle(palette.fg1)
-                    Text("Let's see what today looks like.")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg3)
-                }
+            Text("🧡")
+                .font(.system(size: 88))
+                .scaleEffect(entered ? 1.0 : 0.4)
                 .opacity(entered ? 1 : 0)
-                .offset(y: entered ? 0 : 8)
+
+            Spacer().frame(height: Spacing.s6)
+
+            VStack(spacing: Spacing.s2) {
+                Text("You're in.")
+                    .font(.fraunces(size: 36, weight: 600, opsz: 144, soft: 50))
+                    .tracking(-0.02 * 36)
+                    .foregroundStyle(palette.fg1)
+                Text("Let's see what today looks like.")
+                    .font(.geist(size: 15, weight: 500))
+                    .foregroundStyle(palette.fg3)
             }
+            .opacity(entered ? 1 : 0)
+            .offset(y: entered ? 0 : 8)
+
+            Spacer()
+
+            // Explicit CTA so the user is never stuck waiting. Appears
+            // slightly after the mark + copy land. Auto-advance still
+            // fires via the .task below — whichever happens first wins.
+            PrimaryCTA(title: "Open my list", action: complete)
+                .padding(.horizontal, Spacing.s5)
+                .padding(.bottom, Spacing.s6)
+                .opacity(ctaVisible ? 1 : 0)
+                .offset(y: ctaVisible ? 0 : 12)
         }
-        .onAppear {
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.bg.ignoresSafeArea())
+        .task {
             withAnimation(Motion.spring.delay(0.05)) { entered = true }
-            Task {
-                try? await Task.sleep(for: .milliseconds(1500))
-                onboardingCompleted = true
-            }
+            try? await Task.sleep(for: .milliseconds(900))
+            withAnimation(Motion.spring) { ctaVisible = true }
+            try? await Task.sleep(for: .milliseconds(1800))
+            // Auto-advance if the user's still watching.
+            complete()
         }
         .sensoryFeedback(.success, trigger: entered)
+    }
+
+    private func complete() {
+        guard !onboardingCompleted else { return }
+        onboardingCompleted = true
     }
 }
 

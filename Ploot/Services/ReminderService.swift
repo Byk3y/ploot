@@ -72,6 +72,58 @@ final class ReminderService {
         center.removePendingNotificationRequests(withIdentifiers: [taskId.uuidString])
     }
 
+    // MARK: - Daily check-in (driven by UserPrefs.checkinHour/Minute)
+
+    private static let checkinID = "ploot.checkin"
+
+    /// Schedule the recurring daily ping at the user's check-in time.
+    /// Copy is modulated by `UserPrefs.reminderStyle`. Safe to call
+    /// repeatedly — existing request is cancelled first.
+    ///
+    /// Skipped silently when `reminderStyle == "none"`.
+    func scheduleDailyCheckin() {
+        cancelDailyCheckin()
+        let style = UserPrefs.reminderStyle
+        guard style != "none" else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = checkinTitle(style: style)
+        content.body = checkinBody(style: style)
+        content.sound = .default
+
+        var components = DateComponents()
+        components.hour = UserPrefs.checkinHour
+        components.minute = UserPrefs.checkinMinute
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(
+            identifier: Self.checkinID,
+            content: content,
+            trigger: trigger
+        )
+        center.add(request)
+    }
+
+    func cancelDailyCheckin() {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.checkinID])
+    }
+
+    private func checkinTitle(style: String) -> String {
+        switch style {
+        case "firm": return "Today's goal — \(UserPrefs.dailyGoal) crushes"
+        case "gentle": return "🧡 Ploot check-in"
+        default: return "🧡 Ploot"
+        }
+    }
+
+    private func checkinBody(style: String) -> String {
+        switch style {
+        case "firm": return "You picked the plan. Let's go."
+        case "gentle": return "What's on the list today?"
+        default: return "A soft nudge from your list."
+        }
+    }
+
     // MARK: - Fire-date + body derivation
 
     /// Where the notification actually fires. If the task's dueDate is

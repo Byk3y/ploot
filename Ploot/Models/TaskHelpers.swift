@@ -43,6 +43,23 @@ enum TaskHelpers {
         tasks.filter { $0.isLive && $0.done }
     }
 
+    /// Count of tasks the user has completed today — measured by
+    /// `completedAt` within the local calendar day, not by current
+    /// section. Used by TodayScreen to show progress toward the user's
+    /// daily goal.
+    static func completedToday(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        let start = calendar.startOfDay(for: now)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return 0 }
+        return tasks.filter { task in
+            guard task.isLive, task.done, let c = task.completedAt else { return false }
+            return c >= start && c < end
+        }.count
+    }
+
     /// Drop tombstoned rows. Use this anywhere the UI lists tasks.
     static func live(_ tasks: [PlootTask]) -> [PlootTask] {
         tasks.filter { $0.isLive }
