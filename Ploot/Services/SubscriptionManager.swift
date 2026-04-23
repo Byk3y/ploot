@@ -261,4 +261,24 @@ final class SubscriptionManager {
         print("[Subscription] \(msg)")
         #endif
     }
+
+    // MARK: - Dev bypass
+
+    #if DEBUG
+    /// Flip `isActive` true without going through RC. Lets the owner
+    /// walk past the paywall (screen 21) during dev before App Store
+    /// Connect + RC In-App Purchase Key are configured. Simulates a
+    /// 7-day trial so the TrialEndingBanner + lockscreen paths are
+    /// still exercisable. Stripped from release builds.
+    func debugBypassPaywall() {
+        let end = Date().addingTimeInterval(60 * 60 * 24 * 7)
+        self.isActive = true
+        self.isInTrial = true
+        self.currentPeriodEndsAt = end
+        ReminderService.shared.scheduleTrialEndingReminder(
+            at: end,
+            isInTrial: true
+        )
+    }
+    #endif
 }

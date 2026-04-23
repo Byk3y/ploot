@@ -178,6 +178,18 @@ struct PaywallScreen: View {
                     }
                     .font(.geist(size: 13, weight: 500))
                     .foregroundStyle(palette.fg3)
+
+                    #if DEBUG
+                    Text("·")
+                        .font(.geist(size: 13, weight: 500))
+                        .foregroundStyle(palette.fg3)
+                    Button("Skip (dev)") {
+                        subscription.debugBypassPaywall()
+                        onPurchased()
+                    }
+                    .font(.geist(size: 13, weight: 500))
+                    .foregroundStyle(palette.fg3)
+                    #endif
                 }
             }
             .padding(.horizontal, Spacing.s5)
