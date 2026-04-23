@@ -86,6 +86,31 @@ enum UserPrefs {
         defaults.set(answers.reminderStyle.rawValue, forKey: Key.reminderStyle)
     }
 
+    /// Hydrate from a server-side profile snapshot. Called on a
+    /// returning-user sign-in when `onboarded_at` is set — fills in
+    /// the local UserPrefs that a fresh install would otherwise leave
+    /// at defaults. Only writes keys the snapshot actually has values
+    /// for; missing columns preserve existing local defaults.
+    static func apply(from snapshot: SyncService.OnboardingProfileSnapshot) {
+        if let goal = snapshot.daily_goal {
+            defaults.set(goal, forKey: Key.dailyGoal)
+        }
+        if let timeString = snapshot.checkin_time {
+            // Postgres `time` columns render as "HH:mm:ss" (24h).
+            let parts = timeString.split(separator: ":")
+            if parts.count >= 2, let h = Int(parts[0]), let m = Int(parts[1]) {
+                defaults.set(h, forKey: Key.checkinHour)
+                defaults.set(m, forKey: Key.checkinMinute)
+            }
+        }
+        if let track = snapshot.track_streak {
+            defaults.set(track, forKey: Key.trackStreak)
+        }
+        if let style = snapshot.reminder_style {
+            defaults.set(style, forKey: Key.reminderStyle)
+        }
+    }
+
     /// Reset on sign-out so the next user of this device starts clean.
     static func wipe() {
         for key in [

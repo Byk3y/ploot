@@ -167,27 +167,46 @@ final class SyncService {
             .execute()
     }
 
-    /// True if the current user has already completed onboarding on any
-    /// device. Checks the `profiles.onboarded_at` column — which Phase E
-    /// writes on the first sign-in after the quiz. Used by RootView to
-    /// short-circuit the flow for returning users on fresh installs.
-    func hasCompletedOnboardingRemotely() async -> Bool {
-        guard let userId = await currentOwnerIdAsync() else { return false }
-        struct ProfileOnboardingRow: Decodable {
-            let onboarded_at: String?
-        }
+    /// Snapshot of the onboarding-derived columns on `public.profiles`.
+    /// Returned by `fetchOnboardingProfile` so a returning user on a
+    /// fresh install can hydrate their local `UserPrefs` without
+    /// re-walking the quiz.
+    struct OnboardingProfileSnapshot: Decodable {
+        let onboarded_at: String?
+        let chronotype: String?
+        let daily_goal: Int?
+        let checkin_time: String?      // "HH:mm:ss" from the Postgres `time` column
+        let reminder_style: String?
+        let primary_role: String?
+        let track_streak: Bool?
+
+        var isCompleted: Bool { onboarded_at != nil }
+    }
+
+    /// Fetch the onboarding snapshot for the current user. Returns nil
+    /// on network failure OR missing profile row — the caller treats
+    /// that as "probably not completed; fall through to OnboardingFlow."
+    func fetchOnboardingProfile() async -> OnboardingProfileSnapshot? {
+        guard let userId = await currentOwnerIdAsync() else { return nil }
         do {
-            let row: ProfileOnboardingRow = try await client
+            let snapshot: OnboardingProfileSnapshot = try await client
                 .from("profiles")
-                .select("onboarded_at")
+                .select("onboarded_at,chronotype,daily_goal,checkin_time,reminder_style,primary_role,track_streak")
                 .eq("id", value: userId.uuidString)
                 .single()
                 .execute().value
-            return row.onboarded_at != nil
+            return snapshot
         } catch {
-            log("onboarded_at check failed: \(error)")
-            return false
+            log("onboarding profile fetch failed: \(error)")
+            return nil
         }
+    }
+
+    /// Legacy shorthand — kept so existing callers compile. Prefer
+    /// `fetchOnboardingProfile()` so the snapshot can drive UserPrefs
+    /// hydration in the same roundtrip.
+    func hasCompletedOnboardingRemotely() async -> Bool {
+        await fetchOnboardingProfile()?.isCompleted ?? false
     }
 
     // MARK: - Upsert (raw)

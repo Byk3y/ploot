@@ -44,14 +44,20 @@ struct OnboardingFlow: View {
                 // Returning-user path: user tapped "Sign in" on welcome,
                 // SIWA succeeded. If the account has `onboarded_at` set,
                 // they've already done the quiz on another device — flip
-                // the completion flag so RootView swaps in HomeView.
+                // the completion flag so RootView swaps in HomeView, and
+                // hydrate local UserPrefs (daily goal, check-in hour,
+                // streak-track, reminder style) from the profile so the
+                // new device doesn't silently fall back to defaults.
                 //
                 // Gate on `step == .welcome` so this can't misfire during
                 // the new-user path's screen 22 SIWA (the quiz answers
                 // haven't been pushed yet there).
                 if new == .signedIn && old != .signedIn && step == .welcome {
                     Task {
-                        if await SyncService.shared.hasCompletedOnboardingRemotely() {
+                        if let snapshot = await SyncService.shared.fetchOnboardingProfile(),
+                           snapshot.isCompleted {
+                            UserPrefs.apply(from: snapshot)
+                            ReminderService.shared.scheduleDailyCheckin()
                             onboardingCompleted = true
                         }
                     }

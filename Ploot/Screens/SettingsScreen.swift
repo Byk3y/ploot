@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
+import StoreKit
 
 /// Settings home. Pushed onto the root NavigationStack (not a sheet) so
 /// each section has room to grow into detail panels later.
@@ -18,6 +19,9 @@ struct SettingsScreen: View {
     @State private var confirmingWipe: Bool = false
     @State private var confirmingSignOut: Bool = false
     @State private var nameSyncTask: Task<Void, Never>? = nil
+    @State private var showingManageSubscriptions: Bool = false
+
+    @Bindable private var subscription = SubscriptionManager.shared
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +39,7 @@ struct SettingsScreen: View {
                     profileSection
                     section("Appearance") { appearanceRow }
                     section("Notifications") { notificationsRow }
+                    section("Subscription") { subscriptionRow }
                     section("Data") { dataRows }
                     section("About") { aboutRows }
                     section("Developer") { developerRow }
@@ -54,6 +59,7 @@ struct SettingsScreen: View {
         .navigationDestination(isPresented: $showingTestScreen) {
             TestScreen().toolbar(.hidden, for: .navigationBar)
         }
+        .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
         .alert("Delete all data?", isPresented: $confirmingWipe) {
             Button("Cancel", role: .cancel) {}
             Button("Delete everything", role: .destructive) { wipeAllData() }
@@ -211,6 +217,62 @@ struct SettingsScreen: View {
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
+    }
+
+    // MARK: - Subscription
+
+    private var subscriptionRow: some View {
+        Button(action: openManage) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ploot Pro")
+                        .font(.geist(size: 15, weight: 500))
+                        .foregroundStyle(palette.fg1)
+                    Text(subscriptionSubtitle)
+                        .font(.geist(size: 12, weight: 400))
+                        .foregroundStyle(palette.fg3)
+                }
+                Spacer()
+                Text(subscriptionStatusLabel)
+                    .font(.geist(size: 12, weight: 600))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .foregroundStyle(subscription.isActive ? palette.onPrimary : palette.fg2)
+                    .background(
+                        Capsule().fill(subscription.isActive ? palette.primary : palette.bgSunken)
+                    )
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.fg3)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, Spacing.s3)
+    }
+
+    private var subscriptionStatusLabel: String {
+        subscription.isActive ? "Active" : "Inactive"
+    }
+
+    private var subscriptionSubtitle: String {
+        if subscription.isActive {
+            return "tap to manage plan, cancel, or switch to yearly"
+        } else {
+            return "your trial or subscription isn't active"
+        }
+    }
+
+    private func openManage() {
+        if subscription.isActive {
+            showingManageSubscriptions = true
+        } else {
+            // No active subscription — StoreKit's manage sheet would
+            // just say "nothing to manage". Kick off a refresh + open
+            // anyway so the user sees the status from Apple directly.
+            Task { await subscription.loadProducts() }
+            showingManageSubscriptions = true
+        }
     }
 
     // MARK: - Notifications
