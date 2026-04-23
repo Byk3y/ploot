@@ -119,9 +119,33 @@ struct OnboardingFlow: View {
         case .planningTime:
             PlanningTimeScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
 
+        case .dailyGoal:
+            DailyGoalScreen(answers: answers, onBack: goBack, onContinue: goNext)
+
+        case .checkinTime:
+            CheckinTimeScreen(answers: answers, onBack: goBack, onContinue: goNext)
+
+        case .streak:
+            StreakScreen(answers: answers, onBack: goBack, onContinue: goNext)
+
+        case .reviewPrompt:
+            ReviewPromptScreen(onBack: goBack, onContinue: goNext)
+
+        case .loading:
+            // Auto-advances when the answer stream finishes; no manual back.
+            LoadingScreen(answers: answers, onComplete: goNext)
+
+        case .planReveal:
+            // No back — the user has just committed and we don't want to
+            // give them a "wait let me undo that" exit right before the ask.
+            PlanRevealScreen(answers: answers, onContinue: goNext)
+
+        case .starterProjects:
+            StarterProjectsScreen(answers: answers, onBack: goBack, onContinue: goNext)
+
         default:
-            // Phases C–F build out the remaining screens. Until then,
-            // any advance past screen 12 lands here and loops back.
+            // Phases D–F build out the remaining screens. Until then,
+            // any advance past screen 19 lands here and loops back.
             ComingSoonScreen(step: step, onBack: goBack)
         }
     }

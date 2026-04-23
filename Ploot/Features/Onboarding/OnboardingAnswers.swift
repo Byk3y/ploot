@@ -75,10 +75,65 @@ final class OnboardingAnswers {
     // MARK: - Act 5 plan reveal
     var seedStarterProjects: Bool = true
 
+    /// Starter project suggestions derived from `primaryRole`. Used to
+    /// preview on screen 19 and to seed on sign-in (Phase E).
+    var suggestedProjects: [StarterProject] {
+        StarterProject.suggestions(for: primaryRole)
+    }
+
     private static func defaultCheckin() -> Date {
         var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         c.hour = 8
         c.minute = 47
         return Calendar.current.date(from: c) ?? Date()
+    }
+}
+
+// MARK: - Starter projects
+
+/// Project seeded on sign-in (Phase E). Role-driven so the suggestion
+/// feels tailored — the whole point of the long quiz is to make the
+/// payoff screens earn the investment.
+struct StarterProject: Identifiable, Hashable {
+    let slug: String
+    let name: String
+    let emoji: String
+    let tileColor: ProjectTileColor
+
+    var id: String { slug }
+
+    static func suggestions(for role: PrimaryRole?) -> [StarterProject] {
+        switch role {
+        case .student:
+            return [
+                .init(slug: "classes", name: "Classes", emoji: "📚", tileColor: .sky),
+                .init(slug: "assignments", name: "Assignments", emoji: "📝", tileColor: .butter),
+                .init(slug: "personal", name: "Personal", emoji: "🎯", tileColor: .primary)
+            ]
+        case .founder:
+            return [
+                .init(slug: "shipping", name: "Shipping", emoji: "🚀", tileColor: .primary),
+                .init(slug: "business", name: "Business", emoji: "💼", tileColor: .forest),
+                .init(slug: "home", name: "Home", emoji: "🏡", tileColor: .sky)
+            ]
+        case .parent:
+            return [
+                .init(slug: "home", name: "Home", emoji: "🏡", tileColor: .primary),
+                .init(slug: "errands", name: "Errands", emoji: "🛒", tileColor: .butter),
+                .init(slug: "kids", name: "Kids", emoji: "👶", tileColor: .sky)
+            ]
+        case .creative:
+            return [
+                .init(slug: "projects", name: "Projects", emoji: "🎨", tileColor: .plum),
+                .init(slug: "clients", name: "Clients", emoji: "💼", tileColor: .forest),
+                .init(slug: "life", name: "Life", emoji: "🌿", tileColor: .primary)
+            ]
+        case .individualContributor, .manager, .multiHat, .other, .none:
+            return [
+                .init(slug: "work", name: "Work", emoji: "💼", tileColor: .forest),
+                .init(slug: "home", name: "Home", emoji: "🏡", tileColor: .primary),
+                .init(slug: "personal", name: "Personal", emoji: "🎯", tileColor: .sky)
+            ]
+        }
     }
 }
