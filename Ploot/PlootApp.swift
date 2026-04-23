@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import RevenueCat
 
 @main
 struct PlootApp: App {
@@ -9,6 +10,14 @@ struct PlootApp: App {
 
     init() {
         PlootFonts.register()
+
+        // RevenueCat must be configured before any SubscriptionManager
+        // work touches Purchases.shared. Log level is verbose only in
+        // DEBUG so we see offerings / purchase events during dev.
+        #if DEBUG
+        Purchases.logLevel = .info
+        #endif
+        Purchases.configure(withAPIKey: Secrets.revenueCatPublicKey)
 
         // Register the foreground-banner delegate before any notification
         // would have the chance to fire. Must be set before any scheduled

@@ -1,5 +1,5 @@
 import SwiftUI
-import StoreKit
+import RevenueCat
 
 // MARK: - Screen 20 · Trial transparency
 
@@ -168,7 +168,7 @@ struct PaywallScreen: View {
             VStack(spacing: Spacing.s3) {
                 PrimaryCTA(
                     title: subscription.isPurchasing ? "…" : "Start 7-day free trial",
-                    enabled: !subscription.isPurchasing && (selectedProduct != nil),
+                    enabled: !subscription.isPurchasing && (selectedPackage != nil),
                     action: { Task { await startPurchase() } }
                 )
 
@@ -292,8 +292,8 @@ struct PaywallScreen: View {
     }
 
     private var yearlyPriceLine: String {
-        if let y = subscription.yearlyProduct {
-            return "\(y.displayPrice) / year"
+        if let y = subscription.yearlyPackage?.storeProduct {
+            return "\(y.localizedPriceString) / year"
         }
         return "— / year"
     }
@@ -313,24 +313,24 @@ struct PaywallScreen: View {
     }
 
     private var monthlyPriceLine: String {
-        if let m = subscription.monthlyProduct {
-            return "\(m.displayPrice) / month"
+        if let m = subscription.monthlyPackage?.storeProduct {
+            return "\(m.localizedPriceString) / month"
         }
         return "— / month"
     }
 
-    private var selectedProduct: Product? {
+    private var selectedPackage: Package? {
         switch selected {
-        case .yearly: return subscription.yearlyProduct
-        case .monthly: return subscription.monthlyProduct
+        case .yearly: return subscription.yearlyPackage
+        case .monthly: return subscription.monthlyPackage
         }
     }
 
     // MARK: - Purchase
 
     private func startPurchase() async {
-        guard let product = selectedProduct else { return }
-        let ok = await subscription.purchase(product)
+        guard let package = selectedPackage else { return }
+        let ok = await subscription.purchase(package)
         if ok { onPurchased() }
     }
 }

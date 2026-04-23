@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B100000000000000000000A0 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B100000000000000000000A2 /* Supabase */; };
+		FA6FCC102F9A5906006E40F0 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = FA6FCC0F2F9A5906006E40F0 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA6FCC102F9A5906006E40F0 /* RevenueCat in Frameworks */,
 				B100000000000000000000A0 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,6 +79,7 @@
 			name = Ploot;
 			packageProductDependencies = (
 				B100000000000000000000A2 /* Supabase */,
+				FA6FCC0F2F9A5906006E40F0 /* RevenueCat */,
 			);
 			productName = Ploot;
 			productReference = A1000000000000000000000B /* Ploot.app */;
@@ -109,6 +112,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B100000000000000000000A1 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				FA6FCC0E2F9A5906006E40F0 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			productRefGroup = A1000000000000000000000E /* Products */;
 			projectDirPath = "";
@@ -355,6 +359,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		FA6FCC0E2F9A5906006E40F0 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.69.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -362,6 +374,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B100000000000000000000A1 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		FA6FCC0F2F9A5906006E40F0 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA6FCC0E2F9A5906006E40F0 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

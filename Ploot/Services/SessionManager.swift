@@ -48,6 +48,14 @@ final class SessionManager {
                 currentUser = session.user
                 state = .signedIn
                 authError = nil
+                // Tell RevenueCat who this user is. Aliases the anonymous
+                // RC user (created during the paywall purchase on screen
+                // 21) to the real Supabase user, so the entitlement
+                // follows them across devices / reinstalls.
+                //
+                // No-op for `.initialSession` of an unchanged user —
+                // calling logIn with the same id is safe and cheap.
+                await SubscriptionManager.shared.identify(userId: session.user.id.uuidString)
                 // Pull the profile row so the local @AppStorage matches the
                 // source of truth. Handles the "I signed in on another
                 // device and renamed myself" case too — every session
@@ -60,6 +68,9 @@ final class SessionManager {
         case .signedOut, .userDeleted:
             state = .signedOut
             currentUser = nil
+            // Reset RC to anonymous so the next user of this device
+            // doesn't inherit the prior user's entitlement.
+            await SubscriptionManager.shared.resetUser()
         case .passwordRecovery, .mfaChallengeVerified:
             break
         @unknown default:
