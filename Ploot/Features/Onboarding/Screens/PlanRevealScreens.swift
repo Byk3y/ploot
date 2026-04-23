@@ -86,6 +86,14 @@ struct LoadingScreen: View {
         if let r = answers.primaryRole {
             out.append(("🧩", "\(roleLabel(r)) — got it."))
         }
+        if !answers.whatBringsYou.isEmpty {
+            let n = answers.whatBringsYou.count
+            out.append(("🌀", n == 1 ? "1 reason noted." : "\(n) reasons noted."))
+        }
+        if !answers.gettingInTheWay.isEmpty {
+            let n = answers.gettingInTheWay.count
+            out.append(("🚧", n == 1 ? "1 tripwire — we'll dodge it." : "\(n) tripwires — we'll dodge them."))
+        }
         if let c = answers.chronotype {
             out.append((chronoEmoji(c), "\(chronoLabel(c)) peak hours locked in."))
         }

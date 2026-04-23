@@ -173,8 +173,11 @@ struct OnboardingFlow: View {
             TrialTimelineScreen(onBack: goBack, onContinue: goNext)
 
         case .paywall:
-            // No back — commitment point.
-            PaywallScreen(chrome: .onboarding, onBack: nil, onPurchased: goNext)
+            // Back is allowed — we want the user to be able to
+            // re-read the trial timeline or change their mind about
+            // yearly vs. monthly before the real commitment point,
+            // which is the Start-trial tap (StoreKit sheet).
+            PaywallScreen(chrome: .onboarding, onBack: goBack, onPurchased: goNext)
 
         case .auth:
             // Post-purchase SIWA. Pushes answers + seeds projects on

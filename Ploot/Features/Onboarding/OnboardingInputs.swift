@@ -20,6 +20,7 @@ struct ChoiceCard: View {
                     Text(emoji)
                         .font(.system(size: 24))
                         .frame(width: 36, height: 36)
+                        .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -36,6 +37,7 @@ struct ChoiceCard: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(palette.onPrimary)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, Spacing.s4)
@@ -54,6 +56,14 @@ struct ChoiceCard: View {
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: selected)
         .animation(Motion.springFast, value: selected)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityLabel))
+        .accessibilityHint(Text(selected ? "Selected. Double-tap to deselect." : "Double-tap to select."))
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private var accessibilityLabel: String {
+        [title, subtitle].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -110,11 +120,30 @@ struct PlootTimePicker: View {
     @Binding var time: Date
 
     @Environment(\.plootPalette) private var palette
-    @State private var hourSelection: Int? = nil
-    @State private var minuteSelection: Int? = nil
-    @State private var isAM: Bool = true
+    @State private var hourSelection: Int?
+    @State private var minuteSelection: Int?
+    @State private var isAM: Bool
 
     private let itemWidth: CGFloat = 68
+
+    init(time: Binding<Date>) {
+        self._time = time
+        // Seed the scrub positions from the binding value at construction
+        // time — if we deferred this to .onAppear, the first frame would
+        // render at our defaults (8:47 AM) and visibly snap to the real
+        // value on appearance.
+        let comp = Calendar.current.dateComponents([.hour, .minute], from: time.wrappedValue)
+        let h24 = comp.hour ?? 8
+        let m = comp.minute ?? 47
+        let am = h24 < 12
+        let h12: Int
+        if h24 == 0 { h12 = 12 }
+        else if h24 > 12 { h12 = h24 - 12 }
+        else { h12 = h24 }
+        self._hourSelection = State(initialValue: h12)
+        self._minuteSelection = State(initialValue: m)
+        self._isAM = State(initialValue: am)
+    }
 
     var body: some View {
         VStack(spacing: Spacing.s5) {
@@ -145,7 +174,6 @@ struct PlootTimePicker: View {
                 .strokeBorder(palette.borderInk, lineWidth: 2)
         )
         .stampedShadow(radius: Radius.xl, offset: 2)
-        .onAppear { loadFromBinding() }
         .onChange(of: hourSelection) { _, _ in writeToBinding() }
         .onChange(of: minuteSelection) { _, _ in writeToBinding() }
         .onChange(of: isAM) { _, _ in writeToBinding() }
@@ -284,19 +312,6 @@ struct PlootTimePicker: View {
     }
 
     // MARK: Binding sync
-
-    private func loadFromBinding() {
-        let comp = Calendar.current.dateComponents([.hour, .minute], from: time)
-        let h24 = comp.hour ?? 8
-        let m = comp.minute ?? 47
-        isAM = h24 < 12
-        let h12: Int
-        if h24 == 0 { h12 = 12 }
-        else if h24 > 12 { h12 = h24 - 12 }
-        else { h12 = h24 }
-        hourSelection = h12
-        minuteSelection = m
-    }
 
     private func writeToBinding() {
         guard let h = hourSelection, let m = minuteSelection else { return }

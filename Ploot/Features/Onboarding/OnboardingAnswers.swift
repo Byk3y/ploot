@@ -91,6 +91,12 @@ final class OnboardingAnswers {
         suggestedProjects.filter { selectedStarterSlugs.contains($0.slug) }
     }
 
+    /// 8:47 AM default. Deliberately non-round — round defaults read as
+    /// placeholder text ("oh the picker is just set to 8:00"), whereas an
+    /// odd-minute default reads as "someone chose this intentionally,"
+    /// which nudges the user to tap into the picker and pick their own.
+    /// Chronotype selection (screen 8) overrides this with the relevant
+    /// peak-hour slot before the user reaches screen 14.
     private static func defaultCheckin() -> Date {
         var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         c.hour = 8
