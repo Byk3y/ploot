@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Root container for the quiz → plan reveal → paywall → SIWA flow.
 ///
-/// Phase A: placeholder screen + "Sign in" escape for returning users.
-/// Phases B–E fill in the 25 real screens.
+/// Holds the step index, the shared `OnboardingAnswers`, and handles
+/// forward / back / skip transitions with directional slide + spring.
 ///
 /// Returning-user path: tap "Sign in" (top trailing) → pushes `AuthView`
 /// on the nav stack. When SIWA succeeds `session.state` flips to
@@ -14,12 +14,26 @@ struct OnboardingFlow: View {
 
     @Environment(\.plootPalette) private var palette
     @State private var answers = OnboardingAnswers()
+    @State private var step: OnboardingStep = .welcome
+    @State private var movingBack: Bool = false
 
     var body: some View {
         NavigationStack {
-            placeholder
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
+            ZStack {
+                palette.bg.ignoresSafeArea()
+                screen
+                    .id(step)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: movingBack ? .leading : .trailing).combined(with: .opacity),
+                            removal: .move(edge: movingBack ? .trailing : .leading).combined(with: .opacity)
+                        )
+                    )
+            }
+            .animation(Motion.spring, value: step)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if step == .welcome {
                         NavigationLink {
                             AuthView(session: session)
                         } label: {
@@ -29,87 +43,114 @@ struct OnboardingFlow: View {
                         }
                     }
                 }
+            }
         }
     }
 
-    // MARK: - Phase-A placeholder
+    // MARK: - Step machine
 
-    private var placeholder: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            mark
-            Spacer(minLength: 0)
-            copyBlock
-            Spacer().frame(height: Spacing.s8)
-            getStartedButton
-            Spacer().frame(height: Spacing.s6)
-        }
-        .padding(.horizontal, Spacing.s6)
-        .padding(.bottom, Spacing.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.bg.ignoresSafeArea())
+    private func goNext() {
+        movingBack = false
+        advance()
     }
 
-    private var mark: some View {
-        VStack(spacing: Spacing.s4) {
-            Text("🧡")
-                .font(.system(size: 72))
-                .frame(width: 120, height: 120)
-                .background(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(palette.butter300)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .strokeBorder(palette.borderInk, lineWidth: 2.5)
-                )
-                .stampedShadow(radius: 32, offset: 3)
+    private func goSkip() {
+        movingBack = false
+        advance()
+    }
 
-            Text("Ploot")
-                .font(.fraunces(size: 44, weight: 600, opsz: 144, soft: 50))
-                .tracking(-0.02 * 44)
-                .foregroundStyle(palette.fg1)
+    private func goBack() {
+        movingBack = true
+        retreat()
+    }
+
+    private func advance() {
+        let next = step.rawValue + 1
+        if let s = OnboardingStep(rawValue: next) {
+            step = s
         }
     }
 
-    private var copyBlock: some View {
-        VStack(spacing: Spacing.s3) {
-            Text("Let's build your plan.")
-                .font(.fraunces(size: 28, weight: 600, opsz: 100, soft: 40))
-                .tracking(-0.015 * 28)
-                .foregroundStyle(palette.fg1)
-                .multilineTextAlignment(.center)
-
-            Text("A few quick questions so Ploot matches how you actually work.")
-                .font(.geist(size: 15, weight: 400))
-                .foregroundStyle(palette.fg2)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .frame(maxWidth: 320)
+    private func retreat() {
+        let prev = step.rawValue - 1
+        if let s = OnboardingStep(rawValue: prev) {
+            step = s
         }
     }
 
-    private var getStartedButton: some View {
-        Button {
-            // Screens 1–25 are still being built. For Phase A this button
-            // is intentionally inert; Phase B wires it up to advance.
-        } label: {
-            Text("Get started")
-                .font(.geist(size: 17, weight: 600))
-                .foregroundStyle(palette.onPrimary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(palette.primary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(palette.borderInk, lineWidth: 2)
-                )
-                .stampedShadow(radius: 16, offset: 2)
+    // MARK: - Screen dispatch
+
+    @ViewBuilder
+    private var screen: some View {
+        switch step {
+        case .welcome:
+            WelcomeScreen(onContinue: goNext)
+
+        case .socialProof:
+            SocialProofScreen(onBack: goBack, onContinue: goNext)
+
+        case .whatBringsYou:
+            WhatBringsYouScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .gettingInTheWay:
+            GettingInTheWayScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .role:
+            RoleScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .currentSystem:
+            CurrentSystemScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .tasksPerDay:
+            TasksPerDayScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .chronotype:
+            ChronotypeScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .projectsVsList:
+            ProjectsVsListScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .recurrence:
+            RecurrenceScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .reminderStyle:
+            ReminderStyleScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        case .planningTime:
+            PlanningTimeScreen(answers: answers, onBack: goBack, onContinue: goNext, onSkip: goSkip)
+
+        default:
+            // Phases C–F build out the remaining screens. Until then,
+            // any advance past screen 12 lands here and loops back.
+            ComingSoonScreen(step: step, onBack: goBack)
         }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.impact(weight: .medium), trigger: UUID())
+    }
+}
+
+// MARK: - Placeholder for un-built phases
+
+private struct ComingSoonScreen: View {
+    let step: OnboardingStep
+    let onBack: () -> Void
+
+    @Environment(\.plootPalette) private var palette
+
+    var body: some View {
+        OnboardingFrame(
+            step: step,
+            canAdvance: false,
+            continueTitle: "Not built yet",
+            onBack: onBack,
+            onContinue: {},
+            onSkip: nil
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                QuestionHeader(
+                    eyebrow: "Placeholder",
+                    title: "Screen \(step.ordinal) lands here.",
+                    subtitle: "Phases C–F will fill this in. Go back to keep testing the flow."
+                )
+            }
+        }
     }
 }
