@@ -106,6 +106,90 @@ final class SyncService {
         }
     }
 
+    // MARK: - Profile onboarding push
+
+    /// Writes the OnboardingAnswers bundle to the user's `profiles` row.
+    /// Not debounced — this is called once at the end of onboarding and
+    /// the caller awaits completion before advancing to land screen.
+    ///
+    /// The profiles row already exists via the AFTER INSERT trigger on
+    /// auth.users (see 0001), so we UPDATE, not UPSERT.
+    func pushOnboarding(answers: OnboardingAnswers, userId: UUID?) async throws {
+        guard let userId = userId ?? currentOwnerIdSync() else {
+            throw NSError(domain: "Ploot.Sync", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "No user session — can't push onboarding answers."
+            ])
+        }
+
+        struct OnboardingUpdate: Encodable {
+            let chronotype: String?
+            let daily_goal: Int
+            let checkin_time: String          // HH:mm for Postgres `time`
+            let reminder_style: String
+            let primary_role: String?
+            let planning_time: String?
+            let current_system: String?
+            let tasks_per_day: Int
+            let uses_projects: Bool?
+            let recurrence_heavy: Bool?
+            let track_streak: Bool
+            let onboarded_at: String          // ISO8601 for timestamptz
+            let onboarding_answers: [String: [String]]
+        }
+
+        let timeFmt = DateFormatter()
+        timeFmt.dateFormat = "HH:mm"
+        timeFmt.locale = Locale(identifier: "en_US_POSIX")
+
+        let update = OnboardingUpdate(
+            chronotype: answers.chronotype?.rawValue,
+            daily_goal: answers.dailyGoal,
+            checkin_time: timeFmt.string(from: answers.checkinTime),
+            reminder_style: answers.reminderStyle.rawValue,
+            primary_role: answers.primaryRole?.rawValue,
+            planning_time: answers.planningTime?.rawValue,
+            current_system: answers.currentSystem?.rawValue,
+            tasks_per_day: answers.tasksPerDay,
+            uses_projects: answers.usesProjects,
+            recurrence_heavy: answers.recurrenceHeavy,
+            track_streak: answers.trackStreak,
+            onboarded_at: ISO8601DateFormatter().string(from: Date()),
+            onboarding_answers: [
+                "whatBringsYou": Array(answers.whatBringsYou),
+                "gettingInTheWay": Array(answers.gettingInTheWay)
+            ]
+        )
+
+        try await client
+            .from("profiles")
+            .update(update)
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
+    /// True if the current user has already completed onboarding on any
+    /// device. Checks the `profiles.onboarded_at` column — which Phase E
+    /// writes on the first sign-in after the quiz. Used by RootView to
+    /// short-circuit the flow for returning users on fresh installs.
+    func hasCompletedOnboardingRemotely() async -> Bool {
+        guard let userId = await currentOwnerIdAsync() else { return false }
+        struct ProfileOnboardingRow: Decodable {
+            let onboarded_at: String?
+        }
+        do {
+            let row: ProfileOnboardingRow = try await client
+                .from("profiles")
+                .select("onboarded_at")
+                .eq("id", value: userId.uuidString)
+                .single()
+                .execute().value
+            return row.onboarded_at != nil
+        } catch {
+            log("onboarded_at check failed: \(error)")
+            return false
+        }
+    }
+
     // MARK: - Upsert (raw)
 
     private func upsertTask(_ dto: TaskDTO) async {

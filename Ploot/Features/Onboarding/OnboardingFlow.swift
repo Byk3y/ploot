@@ -1,18 +1,27 @@
 import SwiftUI
+import SwiftData
 
 /// Root container for the quiz → plan reveal → paywall → SIWA flow.
 ///
 /// Holds the step index, the shared `OnboardingAnswers`, and handles
 /// forward / back / skip transitions with directional slide + spring.
 ///
-/// Returning-user path: tap "Sign in" (top trailing) → pushes `AuthView`
-/// on the nav stack. When SIWA succeeds `session.state` flips to
-/// `.signedIn`, `RootView` swaps in `HomeView`, and this stack is torn
-/// down automatically.
+/// `onboardingCompleted` is an @AppStorage binding owned by PlootApp.
+/// The land screen (24) flips it to true; RootView then swaps in
+/// HomeView. This lets the flow survive the `.signedOut → .signedIn`
+/// state transition mid-quiz (after SIWA on screen 22) without the
+/// user being kicked into HomeView early.
+///
+/// Returning-user path: tap "Sign in" on welcome → pushes `AuthView`.
+/// When SIWA succeeds, PlootApp's .onChange checks remote
+/// `profiles.onboarded_at`; if set, onboardingCompleted flips to true
+/// and RootView swaps in HomeView automatically.
 struct OnboardingFlow: View {
     @Bindable var session: SessionManager
+    @Binding var onboardingCompleted: Bool
 
     @Environment(\.plootPalette) private var palette
+    @Environment(\.modelContext) private var modelContext
     @State private var answers = OnboardingAnswers()
     @State private var step: OnboardingStep = .welcome
     @State private var movingBack: Bool = false
@@ -147,43 +156,24 @@ struct OnboardingFlow: View {
             TrialTimelineScreen(onBack: goBack, onContinue: goNext)
 
         case .paywall:
-            // No back from paywall — the point is commitment. The user
-            // can still close the app, but within the flow the only way
-            // forward is purchase or restore.
+            // No back — commitment point.
             PaywallScreen(onBack: nil, onPurchased: goNext)
 
-        default:
-            // Phases D–F build out the remaining screens. Until then,
-            // any advance past screen 19 lands here and loops back.
-            ComingSoonScreen(step: step, onBack: goBack)
-        }
-    }
-}
+        case .auth:
+            // Post-purchase SIWA. Pushes answers + seeds projects on
+            // success, then advances to notifications.
+            PostPurchaseAuthScreen(
+                session: session,
+                answers: answers,
+                modelContext: modelContext,
+                onComplete: goNext
+            )
 
-// MARK: - Placeholder for un-built phases
+        case .notifications:
+            NotificationsScreen(answers: answers, onComplete: goNext)
 
-private struct ComingSoonScreen: View {
-    let step: OnboardingStep
-    let onBack: () -> Void
-
-    @Environment(\.plootPalette) private var palette
-
-    var body: some View {
-        OnboardingFrame(
-            step: step,
-            canAdvance: false,
-            continueTitle: "Not built yet",
-            onBack: onBack,
-            onContinue: {},
-            onSkip: nil
-        ) {
-            VStack(alignment: .leading, spacing: Spacing.s4) {
-                QuestionHeader(
-                    eyebrow: "Placeholder",
-                    title: "Screen \(step.ordinal) lands here.",
-                    subtitle: "Phases C–F will fill this in. Go back to keep testing the flow."
-                )
-            }
+        case .land:
+            LandScreen(onboardingCompleted: $onboardingCompleted)
         }
     }
 }

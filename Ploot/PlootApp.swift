@@ -39,50 +39,65 @@ struct PlootApp: App {
 
 /// Top-level auth gate. While the SDK restores the Keychain session on
 /// launch we show a brief cream splash; once the state settles we route
-/// into AuthView or HomeView.
+/// into OnboardingFlow or HomeView.
+///
+/// OnboardingFlow renders whenever `onboardingCompleted` is false,
+/// regardless of whether the user is signedOut or signedIn. That lets
+/// the post-purchase SIWA (screen 22) flip session state to .signedIn
+/// without kicking the user out of the quiz mid-flow — they keep
+/// advancing through screens 23–24 until LandScreen sets the flag.
 private struct RootView: View {
     @Bindable var session: SessionManager
     @Environment(\.plootPalette) private var palette
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("ploot.onboardingCompleted") private var onboardingCompleted: Bool = false
 
     var body: some View {
         Group {
-            switch session.state {
-            case .loading:
+            if session.state == .loading {
                 splash
-            case .signedOut:
-                OnboardingFlow(session: session)
-                    .transition(.opacity)
-            case .signedIn:
+            } else if session.state == .signedIn && onboardingCompleted {
                 HomeView(session: session)
+                    .transition(.opacity)
+            } else {
+                // .signedOut OR (.signedIn && !onboardingCompleted)
+                // Same structural position so OnboardingFlow's @State
+                // survives the mid-flow signIn transition.
+                OnboardingFlow(session: session, onboardingCompleted: $onboardingCompleted)
                     .transition(.opacity)
             }
         }
         .animation(Motion.spring, value: session.state)
+        .animation(Motion.spring, value: onboardingCompleted)
         .onChange(of: session.state) { old, new in
             // Full pull on every transition into signedIn — covers first
             // sign-in, session restore on cold launch, and sign-in after
             // signing out. After the pull, open the realtime channel so
             // subsequent mutations from other devices stream in live.
+            // Also: check remote `profiles.onboarded_at` so a returning
+            // user on a fresh install skips the quiz and lands directly
+            // in HomeView.
             if new == .signedIn && old != .signedIn {
                 Task {
                     await SyncService.shared.pullAll(context: modelContext)
                     await SyncService.shared.startRealtime(context: modelContext)
+                    if await SyncService.shared.hasCompletedOnboardingRemotely() {
+                        onboardingCompleted = true
+                    }
                 }
             }
             // On sign-out, close realtime first so a late event can't
             // re-insert data after the wipe. Await the teardown before
             // the 300ms UI settle so the wipe can't race a stray echo.
+            // Reset the onboarding flag so the next user of this device
+            // starts at screen 1.
             if new == .signedOut && old == .signedIn {
                 Task {
                     await SyncService.shared.stopRealtime()
-                    // Let the RootView body re-render into AuthView before we
-                    // tear down the underlying data — otherwise HomeView is
-                    // briefly reading @Query arrays whose models are about to
-                    // be deleted, which can log "accessed deleted model" spew.
                     try? await Task.sleep(for: .milliseconds(300))
                     SyncService.shared.wipeLocal(context: modelContext)
+                    onboardingCompleted = false
                 }
             }
         }
