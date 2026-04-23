@@ -52,7 +52,7 @@ private struct RootView: View {
             case .loading:
                 splash
             case .signedOut:
-                AuthView(session: session)
+                OnboardingFlow(session: session)
                     .transition(.opacity)
             case .signedIn:
                 HomeView(session: session)
