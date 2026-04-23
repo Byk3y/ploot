@@ -63,27 +63,38 @@ private struct RootView: View {
         .onChange(of: session.state) { old, new in
             // Full pull on every transition into signedIn — covers first
             // sign-in, session restore on cold launch, and sign-in after
-            // signing out.
+            // signing out. After the pull, open the realtime channel so
+            // subsequent mutations from other devices stream in live.
             if new == .signedIn && old != .signedIn {
-                Task { await SyncService.shared.pullAll(context: modelContext) }
+                Task {
+                    await SyncService.shared.pullAll(context: modelContext)
+                    await SyncService.shared.startRealtime(context: modelContext)
+                }
             }
-            // On sign-out, wipe the local store so the next user of this
-            // device starts with an empty app (their data still lives in
-            // Supabase under their user id).
+            // On sign-out, close realtime first so a late event can't
+            // re-insert data after the wipe. Await the teardown before
+            // the 300ms UI settle so the wipe can't race a stray echo.
             if new == .signedOut && old == .signedIn {
-                // Let the RootView body re-render into AuthView before we
-                // tear down the underlying data — otherwise HomeView is
-                // briefly reading @Query arrays whose models are about to
-                // be deleted, which can log "accessed deleted model" spew.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                Task {
+                    await SyncService.shared.stopRealtime()
+                    // Let the RootView body re-render into AuthView before we
+                    // tear down the underlying data — otherwise HomeView is
+                    // briefly reading @Query arrays whose models are about to
+                    // be deleted, which can log "accessed deleted model" spew.
+                    try? await Task.sleep(for: .milliseconds(300))
                     SyncService.shared.wipeLocal(context: modelContext)
                 }
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Foreground pulls catch changes made on other devices.
+            // Foreground pulls catch changes made on other devices while
+            // the app was suspended (websocket was torn down by iOS) —
+            // then re-open realtime so the foreground stays live.
             if phase == .active && session.state == .signedIn {
-                Task { await SyncService.shared.pullAll(context: modelContext) }
+                Task {
+                    await SyncService.shared.pullAll(context: modelContext)
+                    await SyncService.shared.startRealtime(context: modelContext)
+                }
             }
         }
     }
