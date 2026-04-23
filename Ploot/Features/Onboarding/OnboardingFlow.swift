@@ -143,6 +143,15 @@ struct OnboardingFlow: View {
         case .starterProjects:
             StarterProjectsScreen(answers: answers, onBack: goBack, onContinue: goNext)
 
+        case .trialTimeline:
+            TrialTimelineScreen(onBack: goBack, onContinue: goNext)
+
+        case .paywall:
+            // No back from paywall — the point is commitment. The user
+            // can still close the app, but within the flow the only way
+            // forward is purchase or restore.
+            PaywallScreen(onBack: nil, onPurchased: goNext)
+
         default:
             // Phases D–F build out the remaining screens. Until then,
             // any advance past screen 19 lands here and loops back.
