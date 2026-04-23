@@ -243,15 +243,27 @@ struct PaywallScreen: View {
     private var eyebrowText: String {
         switch chrome {
         case .onboarding: return "Unlock Ploot Pro"
-        case .lockscreen: return "Ploot Pro"
+        case .lockscreen: return justExpired ? "Just expired" : "Welcome back"
         }
     }
 
     private var headlineText: String {
         switch chrome {
-        case .onboarding: return "Keep the plan you just built."
-        case .lockscreen: return "Your trial ended. Pick it back up?"
+        case .onboarding:
+            return "Keep the plan you just built."
+        case .lockscreen:
+            return justExpired
+                ? "Pick it back up — we saved your plan."
+                : "Ready to continue?"
         }
+    }
+
+    /// True when the subscription flipped inactive within the last 24h.
+    /// Drives warmer "just expired" lockscreen copy vs. "come back" for
+    /// users who cancelled months ago.
+    private var justExpired: Bool {
+        guard let lastActive = subscription.lastActiveAt else { return false }
+        return Date().timeIntervalSince(lastActive) < 60 * 60 * 24
     }
 
     // MARK: - Plan cards

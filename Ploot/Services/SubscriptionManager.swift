@@ -41,6 +41,21 @@ final class SubscriptionManager {
     /// `productIDs`. Includes trial periods.
     var isActive: Bool = false
 
+    /// When the current period (trial or regular) ends, per Apple. Used
+    /// by TrialBanner + ReminderService to warn before lockout. Nil
+    /// when there's no active entitlement.
+    var currentPeriodEndsAt: Date? = nil
+
+    /// True when the active entitlement is still in the free-trial
+    /// introductory-offer period. Drives copy shifts in the banner
+    /// ("trial ends" vs. "renews") and the last-chance push.
+    var isInTrial: Bool = false
+
+    /// When the subscription went from active → inactive, if the flip
+    /// happened within the current launch. Lockscreen reads this to
+    /// pick warmer "just expired" copy vs. "come back" copy.
+    var lastActiveAt: Date? = nil
+
     /// Set while a purchase sheet is in-flight so the UI can disable
     /// both plan buttons + show a spinner.
     var isPurchasing: Bool = false
@@ -92,19 +107,68 @@ final class SubscriptionManager {
 
     // MARK: - Entitlements
 
-    /// Walks the current entitlements and flips `isActive` accordingly.
-    /// Called on launch and after every purchase / transaction update.
+    /// Walks the current entitlements and flips `isActive` +
+    /// populates `currentPeriodEndsAt` / `isInTrial`. Called on launch
+    /// and after every purchase / transaction update.
+    ///
+    /// Also schedules the "trial ends soon" local notification and
+    /// persists lastActiveAt so the lockscreen can render warmer copy
+    /// right after expiration.
     func refreshEntitlements() async {
         var active = false
+        var endDate: Date? = nil
+        var inTrial = false
+
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result,
                Self.productIDs.contains(transaction.productID),
                transaction.revocationDate == nil {
                 active = true
+                endDate = transaction.expirationDate
+                // StoreKit 2 reports the introductory trial via offerType.
+                // `.introductory` includes free trials and pay-upfront intro
+                // offers; we only configure free-trial introductory offers
+                // in App Store Connect + Products.storekit, so this is
+                // effectively "is the user currently in the 7-day trial?".
+                // (transaction.offer was added in iOS 17.2 — we target 17.0.)
+                if transaction.offerType == .introductory {
+                    inTrial = true
+                }
                 break
             }
         }
+
+        // Capture the flip to inactive for lockscreen copy.
+        if self.isActive && !active {
+            self.lastActiveAt = Date()
+        }
+
         self.isActive = active
+        self.currentPeriodEndsAt = endDate
+        self.isInTrial = inTrial
+
+        // Reschedule (or cancel) the trial-end push whenever the
+        // entitlement state changes.
+        ReminderService.shared.scheduleTrialEndingReminder(
+            at: endDate,
+            isInTrial: inTrial
+        )
+    }
+
+    /// Minutes remaining until the current period ends. Nil if not
+    /// active or the date is in the past.
+    var minutesUntilEnd: Int? {
+        guard let end = currentPeriodEndsAt else { return nil }
+        let delta = end.timeIntervalSinceNow
+        guard delta > 0 else { return nil }
+        return Int(delta / 60)
+    }
+
+    /// True when we're within 24 hours of the period ending. Drives
+    /// the Today-screen banner visibility.
+    var isWithin24HoursOfEnd: Bool {
+        guard let mins = minutesUntilEnd else { return false }
+        return mins <= 60 * 24
     }
 
     // MARK: - Purchase

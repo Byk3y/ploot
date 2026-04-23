@@ -15,6 +15,7 @@ struct TodayScreen: View {
     @AppStorage(UserPrefs.Key.streakLastDate) private var streakLastDate: String = ""
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
+    @Bindable private var subscription = SubscriptionManager.shared
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.modelContext) private var modelContext
@@ -72,6 +73,7 @@ struct TodayScreen: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                TrialEndingBanner(subscription: subscription)
                 progressStrip
                 let overdue = TaskHelpers.tasks(in: .overdue, from: allTasks)
                 if !overdue.isEmpty {

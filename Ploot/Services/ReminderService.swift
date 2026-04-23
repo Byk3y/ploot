@@ -108,6 +108,41 @@ final class ReminderService {
         center.removePendingNotificationRequests(withIdentifiers: [Self.checkinID])
     }
 
+    // MARK: - Trial-ending reinforcement
+
+    private static let trialEndingID = "ploot.trial.ending"
+
+    /// Schedule a one-shot push 2 hours before the current period ends.
+    /// Called by SubscriptionManager whenever entitlements refresh.
+    ///
+    /// No-op when `endDate` is nil, in the past, or when we're not in
+    /// a free trial (paid subscribers don't need "you're about to be
+    /// charged" anxiety — the native App Store already handles that).
+    func scheduleTrialEndingReminder(at endDate: Date?, isInTrial: Bool) {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.trialEndingID])
+        guard isInTrial, let endDate, endDate > Date() else { return }
+
+        let fireDate = endDate.addingTimeInterval(-60 * 60 * 2)  // T-2h
+        guard fireDate > Date() else { return }  // too close to schedule
+
+        let content = UNMutableNotificationContent()
+        content.title = "Trial ends in 2 hours"
+        content.body = "Keep your plan, your projects, and your streak 🔥 — tap to continue."
+        content.sound = .default
+
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: fireDate
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: Self.trialEndingID,
+            content: content,
+            trigger: trigger
+        )
+        center.add(request)
+    }
+
     private func checkinTitle(style: String) -> String {
         switch style {
         case "firm": return "Today's goal — \(UserPrefs.dailyGoal) crushes"
