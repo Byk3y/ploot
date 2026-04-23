@@ -126,6 +126,15 @@ struct TrialTimelineScreen: View {
 // MARK: - Screen 21 · Paywall
 
 struct PaywallScreen: View {
+    enum Chrome {
+        /// In-flow paywall (screen 21). Progress bar, no escape.
+        case onboarding
+        /// Post-onboarding lockscreen. Sign-out button replaces progress
+        /// so the user can't be trapped if they decide not to pay.
+        case lockscreen(session: SessionManager)
+    }
+
+    let chrome: Chrome
     let onBack: (() -> Void)?
     let onPurchased: () -> Void
     var subscription: SubscriptionManager = .shared
@@ -137,13 +146,7 @@ struct PaywallScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            OnboardingTopBar(
-                canGoBack: onBack != nil,
-                showProgress: true,
-                step: OnboardingStep.paywall.ordinal,
-                total: OnboardingStep.total,
-                onBack: { onBack?() }
-            )
+            topBar
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s6) {
@@ -190,14 +193,42 @@ struct PaywallScreen: View {
         }
     }
 
+    // MARK: - Top bar
+
+    @ViewBuilder
+    private var topBar: some View {
+        switch chrome {
+        case .onboarding:
+            OnboardingTopBar(
+                canGoBack: onBack != nil,
+                showProgress: true,
+                step: OnboardingStep.paywall.ordinal,
+                total: OnboardingStep.total,
+                onBack: { onBack?() }
+            )
+        case .lockscreen(let session):
+            HStack {
+                Spacer()
+                Button("Sign out") {
+                    Task { await session.signOut() }
+                }
+                .font(.geist(size: 14, weight: 500))
+                .foregroundStyle(palette.fg3)
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s3)
+            .padding(.bottom, Spacing.s4)
+        }
+    }
+
     // MARK: - Header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Unlock Ploot Pro")
+            Text(eyebrowText)
                 .eyebrow()
                 .foregroundStyle(palette.fgBrand)
-            Text("Keep the plan you just built.")
+            Text(headlineText)
                 .font(.fraunces(size: 30, weight: 600, opsz: 100, soft: 40))
                 .tracking(-0.015 * 30)
                 .foregroundStyle(palette.fg1)
@@ -207,6 +238,20 @@ struct PaywallScreen: View {
                 .foregroundStyle(palette.fg2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var eyebrowText: String {
+        switch chrome {
+        case .onboarding: return "Unlock Ploot Pro"
+        case .lockscreen: return "Ploot Pro"
+        }
+    }
+
+    private var headlineText: String {
+        switch chrome {
+        case .onboarding: return "Keep the plan you just built."
+        case .lockscreen: return "Your trial ended. Pick it back up?"
+        }
     }
 
     // MARK: - Plan cards

@@ -48,6 +48,7 @@ struct PlootApp: App {
 /// advancing through screens 23–24 until LandScreen sets the flag.
 private struct RootView: View {
     @Bindable var session: SessionManager
+    @Bindable var subscription = SubscriptionManager.shared
     @Environment(\.plootPalette) private var palette
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -57,9 +58,19 @@ private struct RootView: View {
         Group {
             if session.state == .loading {
                 splash
-            } else if session.state == .signedIn && onboardingCompleted {
+            } else if session.state == .signedIn && onboardingCompleted && subscription.isActive {
                 HomeView(session: session)
                     .transition(.opacity)
+            } else if session.state == .signedIn && onboardingCompleted && !subscription.isActive {
+                // Trial ended / subscription cancelled / refund. Lockscreen
+                // paywall — same plan cards as onboarding screen 21, but
+                // with a sign-out escape so the user isn't trapped.
+                PaywallScreen(
+                    chrome: .lockscreen(session: session),
+                    onBack: nil,
+                    onPurchased: {}
+                )
+                .transition(.opacity)
             } else {
                 // .signedOut OR (.signedIn && !onboardingCompleted)
                 // Same structural position so OnboardingFlow's @State
@@ -70,21 +81,26 @@ private struct RootView: View {
         }
         .animation(Motion.spring, value: session.state)
         .animation(Motion.spring, value: onboardingCompleted)
+        .animation(Motion.spring, value: subscription.isActive)
+        .task {
+            // Prime subscription state on cold launch so the gate resolves
+            // correctly before the user notices a flicker.
+            await subscription.loadProducts()
+        }
         .onChange(of: session.state) { old, new in
             // Full pull on every transition into signedIn — covers first
             // sign-in, session restore on cold launch, and sign-in after
             // signing out. After the pull, open the realtime channel so
             // subsequent mutations from other devices stream in live.
-            // Also: check remote `profiles.onboarded_at` so a returning
-            // user on a fresh install skips the quiz and lands directly
-            // in HomeView.
+            //
+            // The returning-user check (hasCompletedOnboardingRemotely)
+            // lives inside OnboardingFlow itself — doing it here would
+            // race the new-user path's pushOnboarding write and could
+            // flip onboardingCompleted early, skipping screens 23–24.
             if new == .signedIn && old != .signedIn {
                 Task {
                     await SyncService.shared.pullAll(context: modelContext)
                     await SyncService.shared.startRealtime(context: modelContext)
-                    if await SyncService.shared.hasCompletedOnboardingRemotely() {
-                        onboardingCompleted = true
-                    }
                 }
             }
             // On sign-out, close realtime first so a late event can't
