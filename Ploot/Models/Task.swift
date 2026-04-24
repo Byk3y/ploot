@@ -206,6 +206,10 @@ final class PlootTask {
         SyncService.shared.push(task: self)
         if value, let ctx = self.modelContext {
             StreakManager.bumpIfGoalHit(context: ctx)
+            // If this task belonged to a breakdown project, surface the
+            // next queued task so the project always has exactly one
+            // active step in Today.
+            ProjectTaskPromoter.promoteNextIfNeeded(afterCompleting: self, context: ctx)
         }
     }
 

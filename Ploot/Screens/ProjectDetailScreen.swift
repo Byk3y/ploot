@@ -16,6 +16,7 @@ struct ProjectDetailScreen: View {
     @State private var addingTask: Bool = false
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
+    @State private var breakingDown: Bool = false
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -56,6 +57,12 @@ struct ProjectDetailScreen: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(28)
+        }
+        .sheet(isPresented: $breakingDown) {
+            BreakdownSheet(project: project, onClose: { breakingDown = false })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(28)
         }
         .sheet(item: $editingTask) { task in
             QuickAddSheet(existingTask: task, onClose: { editingTask = nil })
@@ -150,16 +157,24 @@ struct ProjectDetailScreen: View {
     @ViewBuilder
     private func taskList(tasks: [PlootTask]) -> some View {
         if tasks.isEmpty {
-            EmptyState(
-                systemImage: "tray",
-                title: "Nothing here yet.",
-                subtitle: "Tap + up top to add a task to \(project.name)."
-            )
+            VStack(spacing: Spacing.s4) {
+                BreakdownGhostRow(onTap: { breakingDown = true })
+                    .padding(.horizontal, Spacing.s4)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                EmptyState(
+                    systemImage: "tray",
+                    title: "Nothing here yet.",
+                    subtitle: "Tap + up top to add a task — or let the sparkle do it."
+                )
+            }
             .padding(.top, Spacing.s4)
         } else {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    ForEach(tasks.sorted { ordering($0) < ordering($1) }) { task in
+                    ForEach(tasks.sorted(by: Self.sortLess)) { task in
                         TaskRow(
                             task: task,
                             project: project,
@@ -180,13 +195,27 @@ struct ProjectDetailScreen: View {
         }
     }
 
-    /// Sort order: open tasks first (by dueDate nulls last, then created
-    /// desc), then done tasks (by completedAt desc).
-    private func ordering(_ task: PlootTask) -> (Int, Date) {
-        if task.done {
-            return (1, task.completedAt ?? .distantPast)
+    /// Sort: open tasks first, then done tasks. Within each group:
+    ///   - Open: tasks with a dueDate sort by dueDate ASC (soonest first).
+    ///     Tasks without a dueDate sort AFTER dated ones, then by
+    ///     createdAt DESC so the most recent insertions bubble to the
+    ///     top. Breakdown stamps ordered tasks with sequential createdAts
+    ///     so this preserves the AI's intended order.
+    ///   - Done: by completedAt DESC.
+    private static func sortLess(_ a: PlootTask, _ b: PlootTask) -> Bool {
+        if a.done != b.done { return !a.done }
+        if a.done {
+            return (a.completedAt ?? .distantPast) > (b.completedAt ?? .distantPast)
         }
-        return (0, task.dueDate ?? .distantFuture)
+        switch (a.dueDate, b.dueDate) {
+        case let (.some(ad), .some(bd)):
+            if ad != bd { return ad < bd }
+            return a.createdAt > b.createdAt
+        case (.some, .none): return true
+        case (.none, .some): return false
+        case (.none, .none):
+            return a.createdAt > b.createdAt
+        }
     }
 
     // MARK: - More menu
