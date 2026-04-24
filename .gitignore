@@ -48,3 +48,10 @@ Ploot/Secrets.swift
 # but drop any temp extraction artifacts:
 design_kit.gz
 design_kit.raw
+
+# Supabase CLI scratch — cached config, generated types, linked-project
+# metadata. Entirely per-machine.
+supabase/.temp/
+
+# Local scratch for in-flight work; never part of a commit.
+tmp/
