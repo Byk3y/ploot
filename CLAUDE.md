@@ -188,6 +188,37 @@ The owner has the **Supabase MCP server** wired up in `.mcp.json` (gitignored �
 - **Never log or echo the access token.** It's in `.mcp.json` (gitignored). Don't paste it into commits, comments, error messages, or chat.
 - **Match SwiftData model shapes.** DB uses `snake_case`; Swift uses `camelCase`. Bridge with Supabase SDK config or `CodingKeys`. Columns mirror SwiftData fields 1:1 — if you add a field to a `@Model`, also write a migration for the corresponding column.
 
+## RevenueCat MCP access
+
+The owner has the **RevenueCat MCP server** wired up in `.mcp.json`. When you open this repo in Claude Code, you have direct access to the Ploot RC project via `mcp__revenuecat__*` tools.
+
+- **Project:** `Ploot` (`proj4bf2b770`) — [Dashboard](https://app.revenuecat.com/projects/proj4bf2b770)
+- **iOS app:** `Ploot iOS` (`app118ca9abd3`), bundle id `app.ploot.Ploot`
+- **Entitlement:** `pro` (`entl7ca39e2679`) — gates the whole app. SubscriptionManager reads it as `Self.entitlementID`.
+- **Offering:** `default` (current), with `$rc_monthly` → `ploot.pro.monthly` and `$rc_annual` → `ploot.pro.yearly`. Package id constants in `SubscriptionManager` must stay aligned.
+
+### What to use, when
+
+- **Read inspection**: `list-projects`, `list-apps`, `list-products`, `list-offerings`, `list-entitlements`, `get-customer`, `get-subscription`, `list-purchases`. Safe, fast — prefer these over the dashboard for quick checks.
+- **Debugging a specific user**: `get-customer` with the App User ID (our Supabase user id once aliased by `identify(userId:)`). Shows entitlements, active subscriptions, and purchase history.
+- **Metrics**: `get-overview-metrics`, `get-chart-data` for MRR / conversion / churn snapshots.
+- **Writes** (create/update/archive products, offerings, entitlements): only with explicit owner approval. A wrong archive will silently break paywall offerings on-device.
+
+### Operating rules
+
+- **Never echo the RC v2 API key** from `.mcp.json`. Separate concept from the in-app **public** key (`appl_…` in `Secrets.swift`), which is safe to ship.
+- Product `store_identifier` values (`ploot.pro.monthly`, `ploot.pro.yearly`) are tied to ASC — don't rename them lightly. RC is downstream of ASC; ASC is the source of truth for product ids.
+- If `Purchases.shared.offerings()` returns empty on-device, first check via MCP that the default offering is_current and has both packages attached before digging into the SDK.
+
+## Sandbox IAP testing
+
+- **Primary sandbox tester (on-device):** `francis-test-ng@brigo.ai` — already signed into the iPhone's Sandbox Apple Account slot. Use this one for day-to-day testing runs.
+- **Clean-slate sandbox tester:** `plootsandbox@test.com` / `Pl@247200` (US territory). Use when you need a never-subscribed account to re-exercise trial-eligibility / fresh-paywall UX after the primary has consumed its trial.
+- Sandbox testers can't purchase on the real store, can't access real data, and are scoped to this app's IAPs — creating more is cheap.
+- Sign in on the iPhone at **Settings → Developer → Sandbox Apple Account** (iOS 17+). Do NOT sign this into the real Apple ID slot — the phone supports a separate sandbox account and expects it to be kept separate.
+- Sandbox subscription durations are **compressed**: 1 month = 5 minutes, 1 year = 1 hour. Great for exercising trial-end → lockscreen path. `ReminderService.scheduleTrialEndingReminder` and `TrialEndingBanner` both read real dates from RC, so they just fire faster on the compressed clock.
+- The first sandbox purchase surfaces the `[Sandbox]` tag in the StoreKit sheet. If you don't see it, you're signed into the real App Store — stop, sign out, re-sign into sandbox slot.
+
 ## Things deliberately not in scope yet
 
 - Persistence (SwiftData)
