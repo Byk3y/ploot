@@ -46,5 +46,9 @@
 		<string>Geist-Variable.ttf</string>
 		<string>JetBrainsMono-Variable.ttf</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ploot uses the mic to turn your voice into tasks and projects — held-down dictation only, never background.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns what you say into text on your device. Nothing is recorded or uploaded.</string>
 </dict>
 </plist>
