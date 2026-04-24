@@ -3,6 +3,7 @@ build/
 DerivedData/
 *.xcuserstate
 *.xcuserdata/
+*.xcuserdatad/
 xcuserdata/
 *.xcscmblueprint
 *.xccheckout
