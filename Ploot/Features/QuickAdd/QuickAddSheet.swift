@@ -147,13 +147,14 @@ struct QuickAddSheet: View {
         "Call mom — she misses you"
     ]
 
-    /// Tight Tier 1 detent height. Sized to fit title + meta pills +
-    /// "Break it down" affordance with a hair of breathing room when the
-    /// keyboard is up. `.medium` left a ~200pt dead zone between the
-    /// content and the keyboard top because its fixed half-screen height
-    /// didn't follow the content. The ScrollView still handles overflow
-    /// when the user expands the inline date picker, the note field, or
-    /// the subtasks card — and the user can always drag to `.large`.
+    /// Tier 1 detent height. Sized to fit title + meta pills + "Break
+    /// it down" affordance with breathing room.
+    ///
+    /// Caveat: when the keyboard is up, iOS overrides this and expands
+    /// the sheet to fill the space above the keyboard. The "dead zone"
+    /// of empty space between content and keyboard top is an iOS sheet
+    /// behavior we can't override without ditching `.sheet` for a
+    /// custom overlay-based presentation.
     static let compactDetentHeight: CGFloat = 320
 
     // MARK: - Body
@@ -191,6 +192,19 @@ struct QuickAddSheet: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedCornersTopShape())
+        // Tap-outside-to-close for the inline pickers. Buttons consume
+        // their own taps, so picker rows / pills / save / cancel still
+        // work — only taps in empty space (padding, dead zone) bubble
+        // here and dismiss whichever picker is open.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if datePickerOpen || projectPickerOpen {
+                withAnimation(Motion.spring) {
+                    datePickerOpen = false
+                    projectPickerOpen = false
+                }
+            }
+        }
         .presentationDetents([.height(Self.compactDetentHeight), .large], selection: $detent)
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(28)
