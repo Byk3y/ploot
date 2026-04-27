@@ -81,6 +81,8 @@ struct InlineProjectList: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -113,10 +115,12 @@ struct InlineProjectList: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                                 .fill(selection == project.id ? palette.clay100 : .clear)
                         )
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
