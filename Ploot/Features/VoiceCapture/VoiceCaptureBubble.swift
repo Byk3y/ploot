@@ -22,6 +22,7 @@ struct VoiceCaptureBubble: View {
     var onCancel: () -> Void
 
     @Environment(\.plootPalette) private var palette
+    @Environment(\.plootTheme) private var theme
     @State private var pulse: Bool = false
 
     private let maxHeight: CGFloat = 260
@@ -57,8 +58,12 @@ struct VoiceCaptureBubble: View {
         .padding(.top, Spacing.s3)
         .padding(.bottom, Spacing.s3)
         .background(
+            // Cocoa's bgElevated only sits ~one stop above bg, so the
+            // listening bubble blends into the chocolate canvas. Lift it
+            // a few stops with a warm caramel that still belongs to the
+            // theme. Light is unchanged.
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(palette.bgElevated)
+                .fill(theme == .cocoa ? Color(hex: 0x6A4F38) : palette.bgElevated)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -109,9 +114,12 @@ struct VoiceCaptureBubble: View {
         switch phase {
         case .listening:
             if transcript.isEmpty {
+                // Cocoa's fg3 is a muted brown that drops to ~illegible
+                // on the chocolate canvas, so use fg2 there. Light's fg3
+                // already reads correctly on cream.
                 Text("say it...")
                     .font(.fraunces(size: 18, weight: 500, opsz: 18, soft: 60))
-                    .foregroundStyle(palette.fg3)
+                    .foregroundStyle(theme == .cocoa ? palette.fg2 : palette.fg3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 // ViewThatFits picks the first option that fits the
@@ -151,8 +159,17 @@ struct VoiceCaptureBubble: View {
                 Text("enable mic + speech in settings → ploot.")
                     .font(.geist(size: 12, weight: 400))
                     .foregroundStyle(palette.fg3)
-                Button("Got it", action: onCancel)
+                HStack(spacing: Spacing.s2) {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                        onCancel()
+                    }
                     .buttonStyle(.ploot(.primary, size: .sm))
+                    Button("Got it", action: onCancel)
+                        .buttonStyle(.ploot(.ghost, size: .sm))
+                }
             }
         }
     }
