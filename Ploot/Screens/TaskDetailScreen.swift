@@ -40,9 +40,6 @@ struct TaskDetailScreen: View {
         }
         .sheet(isPresented: $editing) {
             QuickAddSheet(existingTask: task, onClose: { editing = false })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-                .presentationCornerRadius(28)
         }
         .alert("Delete this task?", isPresented: $confirmingDelete) {
             Button("Cancel", role: .cancel) {}

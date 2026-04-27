@@ -54,9 +54,6 @@ struct ProjectDetailScreen: View {
                 initialProjectId: project.id,
                 onClose: { addingTask = false }
             )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-            .presentationCornerRadius(28)
         }
         .sheet(isPresented: $breakingDown) {
             BreakdownSheet(project: project, onClose: { breakingDown = false })
@@ -66,15 +63,25 @@ struct ProjectDetailScreen: View {
         }
         .sheet(item: $editingTask) { task in
             QuickAddSheet(existingTask: task, onClose: { editingTask = nil })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-                .presentationCornerRadius(28)
         }
-        .alert("Delete this project?", isPresented: $confirmingDelete) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) { performDelete() }
-        } message: {
-            Text("Tasks in this project will stay, but lose their project label.")
+        .sheet(isPresented: $confirmingDelete) {
+            let count = liveTaskCount
+            DeleteProjectSheet(
+                project: project,
+                taskCount: count,
+                onKeepTasks: {
+                    confirmingDelete = false
+                    performDelete(cascade: false)
+                },
+                onCascade: {
+                    confirmingDelete = false
+                    performDelete(cascade: true)
+                },
+                onCancel: { confirmingDelete = false }
+            )
+            .presentationDetents([.height(count > 0 ? 420 : 320)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(28)
         }
         .alert("Delete this task?", isPresented: .init(
             get: { deletingTask != nil },
@@ -84,8 +91,10 @@ struct ProjectDetailScreen: View {
             Button("Delete", role: .destructive) {
                 if let task = deletingTask {
                     ReminderService.shared.cancel(for: task)
-                    task.softDelete()
-                    try? modelContext.save()
+                    withAnimation(Motion.spring) {
+                        task.softDelete()
+                        try? modelContext.save()
+                    }
                 }
                 deletingTask = nil
             }
@@ -243,20 +252,32 @@ struct ProjectDetailScreen: View {
         .menuStyle(.button)
     }
 
-    private func performDelete() {
+    private var liveTaskCount: Int {
+        allTasks.filter { $0.isLive && $0.projectId == project.id }.count
+    }
+
+    /// Two paths:
+    ///   - cascade=false: mirror Supabase's ON DELETE SET NULL, null out
+    ///     projectId on every task that referenced this project. Tasks
+    ///     keep all other content.
+    ///   - cascade=true: soft-delete each task too, canceling its reminder
+    ///     and propagating the tombstone to Supabase. Use when the user
+    ///     explicitly opts to throw the work away with the project.
+    private func performDelete(cascade: Bool) {
         let projectToDelete = project
         let idToDelete = project.id
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            // Mirror Supabase's ON DELETE SET NULL: null out projectId on any
-            // task that referenced this project, then soft-delete the
-            // project itself. Tasks keep all other content and sync
-            // continues to push/pull them.
             let fetch = FetchDescriptor<PlootTask>()
             let tasks = (try? modelContext.fetch(fetch)) ?? []
-            for task in tasks where task.projectId == idToDelete {
-                task.projectId = nil
-                task.touch()
+            for task in tasks where task.isLive && task.projectId == idToDelete {
+                if cascade {
+                    ReminderService.shared.cancel(for: task)
+                    task.softDelete()
+                } else {
+                    task.projectId = nil
+                    task.touch()
+                }
             }
             projectToDelete.softDelete()
             try? modelContext.save()

@@ -30,9 +30,6 @@ struct TodayScreen: View {
         )
         .sheet(item: $editingTask) { task in
             QuickAddSheet(existingTask: task, onClose: { editingTask = nil })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-                .presentationCornerRadius(28)
         }
         .alert("Delete this task?", isPresented: .init(
             get: { deletingTask != nil },
@@ -42,8 +39,10 @@ struct TodayScreen: View {
             Button("Delete", role: .destructive) {
                 if let task = deletingTask {
                     ReminderService.shared.cancel(for: task)
-                    task.softDelete()
-                    try? modelContext.save()
+                    withAnimation(Motion.spring) {
+                        task.softDelete()
+                        try? modelContext.save()
+                    }
                 }
                 deletingTask = nil
             }

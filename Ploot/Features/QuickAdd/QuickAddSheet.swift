@@ -1,31 +1,82 @@
 import SwiftUI
 import SwiftData
 
+/// "Calm capture" task sheet.
+///
+/// Two tiers:
+///   * Tier 1 (medium detent) — title-first capture. Three meta pills below
+///     (date, project, more), a "+ note" and "+ break it down" affordance.
+///     Designed so the 80% path is "type, glance at pills, save."
+///   * Tier 2 (large detent) — adds priority, repeat, and remind-me. Reveals
+///     when the user taps the more-pill or drags the sheet up. Editing an
+///     existing task opens straight at Tier 2.
+///
+/// NLP cues in the title fill the pills automatically (Todoist-style):
+/// "tomorrow", "5pm", "urgent" / "!!", "@projectname" all silently bind
+/// state and pulse the affected pill. Once the user taps a pill, that
+/// field becomes user-set and NLP stops overwriting it.
+///
+/// Section views (title, meta row, pills, inline pickers, subtasks,
+/// Tier 2 details) live in QuickAddSheet+Views.swift; state setters,
+/// NLP parser, and submit logic live in QuickAddSheet+Logic.swift.
+/// State below is internal-access (no `private`) so the cross-file
+/// extensions can read/write it.
 struct QuickAddSheet: View {
-    /// When non-nil, the sheet is in edit mode: fields are prefilled from
-    /// this task and Save mutates it in place instead of inserting a new row.
     let existingTask: PlootTask?
-    /// Pre-selects a project when creating a new task. Ignored when
-    /// `existingTask` is set (the task's own projectId wins).
     let initialProjectId: String?
     var onClose: () -> Void
 
-    @Environment(\.plootPalette) private var palette
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.plootPalette) var palette
+    @Environment(\.modelContext) var modelContext
+    // Live projects only. Tombstones (deletedAt != nil) shouldn't be
+    // pickable as a destination, NLP shouldn't @mention-match against
+    // them, and currentProject's display lookup shouldn't latch on to
+    // a deleted row's name.
+    @Query(
+        filter: #Predicate<PlootProject> { $0.deletedAt == nil },
+        sort: \PlootProject.order
+    ) var allProjects: [PlootProject]
 
-    @State private var title: String
-    @State private var note: String
-    @State private var projectId: String
-    @State private var priority: Priority
-    @State private var due: DueOption
-    @State private var time: String?
-    @State private var remindMe: Bool
-    @State private var repeats: RepeatOption
-    @State private var subtasks: [Subtask]
-    @State private var subInput: String = ""
-    @State private var focusedSection: FocusedSection? = nil
-    @State private var placeholderIndex: Int = Int.random(in: 0..<placeholders.count)
-    @FocusState private var titleFocused: Bool
+    // MARK: - Field state
+
+    @State var title: String
+    @State var note: String
+    @State var projectId: String
+    @State var priority: Priority
+    @State var due: DueOption
+    /// Overrides `due` when the user picks a specific calendar date that
+    /// doesn't fit the coarse buckets. Preserves arbitrary dueDates across
+    /// an edit cycle (the previous design silently dropped them).
+    @State var customDate: Date?
+    @State var time: String?
+    @State var remindMe: Bool
+    @State var repeats: RepeatOption
+    @State var subtasks: [Subtask]
+    @State var subInput: String = ""
+
+    // MARK: - UI state
+
+    @State var detent: PresentationDetent
+    @State var showNote: Bool
+    @State var showSubtasks: Bool
+    @State var datePickerOpen: Bool = false
+    @State var projectPickerOpen: Bool = false
+    @State var fullCalendarOpen: Bool = false
+
+    // NLP override flags — stop auto-fill once the user has manually set a
+    // field. Edits start with these true so we don't trample existing values.
+    @State var dateUserSet: Bool
+    @State var priorityUserSet: Bool
+    @State var projectUserSet: Bool
+
+    // Pulse triggers — bumped (incremented) to spring-scale the matching pill
+    // when NLP or a user tap commits a value.
+    @State var datePulse: Int = 0
+    @State var projectPulse: Int = 0
+
+    @State var placeholderIndex: Int = Int.random(in: 0..<placeholders.count)
+    @FocusState var titleFocused: Bool
+    @FocusState var noteFocused: Bool
 
     init(
         existingTask: PlootTask? = nil,
@@ -36,21 +87,45 @@ struct QuickAddSheet: View {
         self.initialProjectId = initialProjectId
         self.onClose = onClose
 
-        // Prefill from the task when editing; otherwise fall back to the
-        // initialProjectId caller hint, then the inbox sentinel.
+        let isEditing = existingTask != nil
+        let parsedDue = DueOption.fromDate(existingTask?.dueDate)
+        // If the existing date didn't fit any bucket, fromDate returned
+        // .someday. Stash the real date in customDate so it survives.
+        let initialCustom: Date?
+        if let existing = existingTask?.dueDate, parsedDue == .someday {
+            initialCustom = existing
+        } else {
+            initialCustom = nil
+        }
+
         _title = State(initialValue: existingTask?.title ?? "")
         _note = State(initialValue: existingTask?.note ?? "")
         _projectId = State(initialValue: existingTask?.projectId ?? initialProjectId ?? "inbox")
         _priority = State(initialValue: existingTask?.priority ?? .normal)
-        _due = State(initialValue: DueOption.fromDate(existingTask?.dueDate))
+        _due = State(initialValue: parsedDue)
+        _customDate = State(initialValue: initialCustom)
         _time = State(initialValue: Self.extractTimeSlot(from: existingTask?.dueDate))
         _remindMe = State(initialValue: existingTask?.remindMe ?? false)
         _repeats = State(initialValue: RepeatOption.fromStored(existingTask?.repeats))
-        _subtasks = State(initialValue: existingTask?.subtasks.sorted { $0.order < $1.order } ?? [])
+        let initialSubs = existingTask?.subtasks
+            .filter(\.isLive)
+            .sorted { $0.order < $1.order } ?? []
+        _subtasks = State(initialValue: initialSubs)
+
+        // Edit mode opens at Tier 2 — fields are populated and the user is
+        // here to tweak something specific. New tasks open at Tier 1 and
+        // expand only on demand.
+        _detent = State(initialValue: isEditing ? .large : .height(Self.compactDetentHeight))
+        _showNote = State(initialValue: !(existingTask?.note?.isEmpty ?? true))
+        _showSubtasks = State(initialValue: !initialSubs.isEmpty)
+
+        // Treat every populated field on edit as user-set so NLP doesn't
+        // overwrite it when the user touches the title.
+        _dateUserSet = State(initialValue: isEditing && existingTask?.dueDate != nil)
+        _priorityUserSet = State(initialValue: isEditing && (existingTask?.priority ?? .normal) != .normal)
+        _projectUserSet = State(initialValue: isEditing && existingTask?.projectId != nil)
     }
 
-    /// Read a "h:mm a" time slot string out of a date, or return nil if the
-    /// date is midnight-aligned (meaning no time was set).
     private static func extractTimeSlot(from date: Date?) -> String? {
         guard let date else { return nil }
         let cal = Calendar.current
@@ -63,7 +138,7 @@ struct QuickAddSheet: View {
         return fmt.string(from: date)
     }
 
-    private static let placeholders = [
+    static let placeholders = [
         "Water the mysterious plant",
         "Finally reply to that email",
         "Outline the Q3 pitch deck",
@@ -72,30 +147,38 @@ struct QuickAddSheet: View {
         "Call mom — she misses you"
     ]
 
-    private let timeSlots = ["8:00 AM", "9:00 AM", "10:00 AM", "12:00 PM", "2:00 PM", "5:00 PM"]
+    /// Tight Tier 1 detent height. Sized to fit title + meta pills +
+    /// "Break it down" affordance with a hair of breathing room when the
+    /// keyboard is up. `.medium` left a ~200pt dead zone between the
+    /// content and the keyboard top because its fixed half-screen height
+    /// didn't follow the content. The ScrollView still handles overflow
+    /// when the user expands the inline date picker, the note field, or
+    /// the subtasks card — and the user can always drag to `.large`.
+    static let compactDetentHeight: CGFloat = 320
+
+    // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
             grabber
             topBar
             ScrollView {
-                VStack(spacing: Spacing.s3) {
-                    titleCard
-                    SettingBlock(icon: "calendar", label: "When", value: dueValueText) {
-                        dueButtons
-                        Divider().background(palette.border).padding(.vertical, Spacing.s3)
-                        timeSlotsRow
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    titleSection
+                    metaRow
+                    inlinePickerArea
+                    subtaskArea
+                    if detent == .large {
+                        detailsCard
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .bottom)),
+                                removal: .opacity
+                            ))
                     }
-                    projectPicker
-                    SettingBlock(icon: "flag", label: "Priority", value: priorityValueText) {
-                        priorityButtons
-                    }
-                    reminderRepeatCard
-                    subtasksCard
-                    Color.clear.frame(height: 20)
+                    Color.clear.frame(height: 40)
                 }
                 .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s1)
+                .padding(.top, Spacing.s2)
                 .padding(.bottom, Spacing.s6)
                 .dismissKeyboardOnTap()
             }
@@ -108,10 +191,27 @@ struct QuickAddSheet: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedCornersTopShape())
+        .presentationDetents([.height(Self.compactDetentHeight), .large], selection: $detent)
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(28)
+        .animation(Motion.spring, value: detent)
+        .animation(Motion.spring, value: datePickerOpen)
+        .animation(Motion.spring, value: projectPickerOpen)
+        .animation(Motion.spring, value: showNote)
+        .animation(Motion.spring, value: showSubtasks)
         .onAppear {
-            // Only autofocus in create mode — in edit mode the user already
-            // has a title and likely wants to tweak something specific.
             if existingTask == nil { titleFocused = true }
+        }
+        .onChange(of: title) { _, newVal in
+            applyNLP(from: newVal)
+        }
+        .sheet(isPresented: $fullCalendarOpen) {
+            DatePickerSheet(initialDate: customDate ?? due.date(timeSlot: nil) ?? Date()) { picked in
+                setCustomDate(picked)
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(28)
         }
     }
 
@@ -122,11 +222,12 @@ struct QuickAddSheet: View {
             .fill(palette.borderStrong)
             .frame(width: 44, height: 5)
             .padding(.top, 10)
-            .padding(.bottom, 10)
+            .padding(.bottom, 8)
     }
 
     private var topBar: some View {
-        HStack {
+        let canSave = !title.trimmingCharacters(in: .whitespaces).isEmpty
+        return HStack {
             Button("Cancel", action: onClose)
                 .font(.geist(size: 15, weight: 500))
                 .foregroundStyle(palette.fg2)
@@ -134,958 +235,18 @@ struct QuickAddSheet: View {
             Spacer()
 
             Text(existingTask == nil ? "New task" : "Edit task")
-                .font(.fraunces(size: 20, weight: 600, soft: 80))
-                .tracking(-0.015 * 20)
+                .font(.fraunces(size: 18, weight: 600, soft: 80))
+                .tracking(-0.015 * 18)
                 .foregroundStyle(palette.fg1)
 
             Spacer()
 
             Button("Save", action: submit)
                 .buttonStyle(PlootButtonStyle(variant: .primary, size: .sm))
-                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(title.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
         }
         .padding(.horizontal, Spacing.s4)
-        .padding(.bottom, Spacing.s3)
-    }
-
-    // MARK: - Title + note card
-
-    private var titleCard: some View {
-        let focused = focusedSection == .title || titleFocused
-        return VStack(alignment: .leading, spacing: Spacing.s2) {
-            TextField(
-                Self.placeholders[placeholderIndex],
-                text: $title,
-                axis: .vertical
-            )
-            .focused($titleFocused)
-            .font(.fraunces(size: 24, weight: 500, soft: 50))
-            .tracking(-0.015 * 24)
-            .foregroundStyle(palette.fg1)
-            .lineLimit(1...4)
-
-            TextField("Add a note...", text: $note, axis: .vertical)
-                .font(.geist(size: 14, weight: 400))
-                .foregroundStyle(palette.fg2)
-                .lineLimit(1...3)
-                .padding(.top, Spacing.s1)
-
-            if !nlpHints.isEmpty {
-                Divider().background(palette.border).padding(.vertical, Spacing.s2)
-                HStack(spacing: 6) {
-                    Text("I picked up:")
-                        .font(.jetBrainsMono(size: 10, weight: 600))
-                        .tracking(10 * 0.08)
-                        .textCase(.uppercase)
-                        .foregroundStyle(palette.fg3)
-                    ForEach(nlpHints) { hint in
-                        Chip(text: hint.label, color: hint.chipColor, icon: hint.icon)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.bgElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .strokeBorder(focused ? palette.borderInk : palette.border, lineWidth: 2)
-        )
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.borderInk)
-                .offset(y: focused ? 2 : 0)
-                .opacity(focused ? 1 : 0)
-        )
-        .offset(y: focused ? -1 : 0)
-        .animation(Motion.easeOut(duration: 0.14), value: focused)
-        .onTapGesture { titleFocused = true }
-    }
-
-    // MARK: - Date picker
-
-    private var dueButtons: some View {
-        FlowLayout(spacing: 8, lineSpacing: 8) {
-            ForEach(DueOption.allCases) { option in
-                StampPillButton(
-                    systemImage: option.icon,
-                    label: option.label,
-                    active: due == option
-                ) {
-                    due = option
-                }
-            }
-        }
-    }
-
-    private var timeSlotsRow: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: 4) {
-                Text("Pick a time")
-                    .font(.jetBrainsMono(size: 10, weight: 600))
-                    .tracking(10 * 0.08)
-                    .textCase(.uppercase)
-                    .foregroundStyle(palette.fg3)
-                Text("· optional")
-                    .font(.jetBrainsMono(size: 10, weight: 500))
-                    .foregroundStyle(palette.fg3.opacity(0.7))
-            }
-            FlowLayout(spacing: 6, lineSpacing: 6) {
-                ForEach(timeSlots, id: \.self) { slot in
-                    TimePillButton(
-                        label: slot,
-                        active: time == slot
-                    ) {
-                        time = (time == slot) ? nil : slot
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Project picker
-
-    private var projectPicker: some View {
-        ProjectPicker(
-            selection: $projectId,
-            isOpen: Binding(
-                get: { focusedSection == .project },
-                set: { focusedSection = $0 ? .project : nil }
-            )
-        )
-    }
-
-    // MARK: - Priority picker
-
-    private var priorityButtons: some View {
-        HStack(spacing: Spacing.s2) {
-            ForEach(Priority.allCases) { p in
-                PriorityTile(priority: p, active: priority == p) {
-                    priority = p
-                }
-            }
-        }
-    }
-
-    // MARK: - Reminder + repeat
-
-    private var reminderRepeatCard: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "bell")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.fg2)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Remind me")
-                        .font(.geist(size: 14, weight: 600))
-                        .foregroundStyle(palette.fg1)
-                    Text(remindMe ? "\(time ?? "9:00 AM"), day-of" : "We won't nag you")
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                PlootToggle(isOn: $remindMe)
-            }
-
-            Divider().background(palette.border).padding(.vertical, Spacing.s3)
-
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.fg2)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Repeats")
-                        .font(.geist(size: 14, weight: 600))
-                        .foregroundStyle(palette.fg1)
-                    Text(repeats == .never ? "Just this once" : repeats.rawValue.capitalized)
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-            }
-
-            HStack(spacing: 6) {
-                ForEach(RepeatOption.allCases) { opt in
-                    Button {
-                        repeats = opt
-                    } label: {
-                        Text(opt.rawValue.capitalized)
-                            .font(.geist(size: 12, weight: 600))
-                            .foregroundStyle(repeats == opt ? palette.fgInverse : palette.fg2)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(repeats == opt ? palette.borderInk : palette.bgSunken)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, Spacing.s2)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.bgElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .strokeBorder(palette.border, lineWidth: 2)
-        )
-    }
-
-    // MARK: - Subtasks
-
-    private var subtasksCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "checklist")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.fg2)
-                    .frame(width: 18)
-                Text("Break it down")
-                    .font(.geist(size: 14, weight: 600))
-                    .foregroundStyle(palette.fg1)
-                Spacer()
-                if !subtasks.isEmpty {
-                    Text("\(subtasks.count) step\(subtasks.count == 1 ? "" : "s")")
-                        .font(.jetBrainsMono(size: 11, weight: 600))
-                        .foregroundStyle(palette.fg3)
-                }
-            }
-            .padding(.bottom, subtasks.isEmpty ? 0 : Spacing.s2)
-
-            ForEach(subtasks) { sub in
-                HStack(spacing: 10) {
-                    Circle()
-                        .strokeBorder(palette.borderStrong, lineWidth: 2)
-                        .frame(width: 16, height: 16)
-                    Text(sub.title)
-                        .font(.geist(size: 14, weight: 400))
-                        .foregroundStyle(palette.fg1)
-                    Spacer()
-                    Button {
-                        withAnimation(Motion.springFast) {
-                            subtasks.removeAll { $0.id == sub.id }
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(palette.fg3)
-                            .frame(width: 22, height: 22)
-                            .background(Circle().fill(palette.bgSunken))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.vertical, Spacing.s2)
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(palette.border).frame(height: 1)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(palette.fg3)
-                TextField("Add a step", text: $subInput)
-                    .font(.geist(size: 14, weight: 400))
-                    .foregroundStyle(palette.fg1)
-                    .onSubmit { addSubtask() }
-                if !subInput.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button("Add", action: addSubtask)
-                        .font(.geist(size: 11, weight: 700))
-                        .tracking(11 * 0.04)
-                        .textCase(.uppercase)
-                        .foregroundStyle(palette.onPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(palette.primary)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(palette.borderInk, lineWidth: 1.5)
-                        )
-                        .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, subtasks.isEmpty ? Spacing.s2 : Spacing.s1)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.bgElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .strokeBorder(palette.border, lineWidth: 2)
-        )
-    }
-
-    // MARK: - Actions
-
-    private func addSubtask() {
-        let trimmed = subInput.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        withAnimation(Motion.springFast) {
-            subtasks.append(Subtask(title: trimmed, order: subtasks.count))
-        }
-        subInput = ""
-    }
-
-    private func submit() {
-        let trimmed = title.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        let resolvedDate = due.date(timeSlot: time)
-        let resolvedProjectId: String? = projectId == "inbox" ? nil : projectId
-        let resolvedRepeats: String? = repeats == .never ? nil : repeats.rawValue
-        let resolvedNote: String? = note.isEmpty ? nil : note
-
-        let savedTask: PlootTask
-        if let existing = existingTask {
-            // Update in place. Keep createdAt/completedAt/done untouched —
-            // those are managed by TaskRow/detail-screen toggles, not this sheet.
-            existing.title = trimmed
-            existing.note = resolvedNote
-            existing.dueDate = resolvedDate
-            existing.due = nil  // derived labels win now
-            existing.projectId = resolvedProjectId
-            existing.priority = priority
-            existing.repeats = resolvedRepeats
-            existing.remindMe = remindMe
-            // Replace the subtasks list: tombstone the ones that were
-            // removed (so sync can propagate the delete), keep the ones
-            // still present, insert the new ones.
-            let keptIds = Set(subtasks.map(\.id))
-            for old in existing.subtasks where !keptIds.contains(old.id) {
-                old.softDelete()
-            }
-            existing.subtasks = subtasks
-            existing.touch()
-            savedTask = existing
-        } else {
-            let task = PlootTask(
-                title: trimmed,
-                note: resolvedNote,
-                due: nil,  // display label derives from dueDate now
-                dueDate: resolvedDate,
-                projectId: resolvedProjectId,
-                priority: priority,
-                subtasks: subtasks,
-                section: .today,
-                repeats: resolvedRepeats,
-                remindMe: remindMe
-            )
-            modelContext.insert(task)
-            savedTask = task
-        }
-        try? modelContext.save()
-
-        // Push the mutation upstream. push(task:) upserts the task then
-        // its live subtasks sequentially, so the FK-ordered flow is
-        // handled inside SyncService. No separate subtask pushes needed
-        // here.
-        SyncService.shared.push(task: savedTask)
-
-        // Re-sync the notification. The service is idempotent — cancels any
-        // existing request for this task then schedules a fresh one if the
-        // task still wants a reminder in the future.
-        if remindMe {
-            Task {
-                _ = await ReminderService.shared.requestAuthorizationIfNeeded()
-                await MainActor.run {
-                    ReminderService.shared.schedule(for: savedTask)
-                }
-            }
-        } else {
-            ReminderService.shared.cancel(for: savedTask)
-        }
-
-        onClose()
-    }
-
-    // MARK: - Computed display values
-
-    private var dueValueText: String {
-        due.label + (time.map { " · \($0)" } ?? "")
-    }
-
-    private var priorityValueText: String {
-        priority.label + (priority.emoji.isEmpty ? "" : " \(priority.emoji)")
-    }
-
-    private var nlpHints: [NLPHint] {
-        var hints: [NLPHint] = []
-        let lower = title.lowercased()
-        if lower.range(of: "\\btomorrow\\b", options: .regularExpression) != nil {
-            hints.append(NLPHint(label: "tomorrow", icon: "calendar", chipColor: .clay))
-        } else if lower.range(of: "\\btoday\\b", options: .regularExpression) != nil {
-            hints.append(NLPHint(label: "today", icon: "calendar", chipColor: .clay))
-        } else if lower.range(of: "\\b(mon|tue|wed|thu|fri|sat|sun)", options: .regularExpression) != nil {
-            hints.append(NLPHint(label: "day", icon: "calendar", chipColor: .clay))
-        }
-        if lower.range(of: "\\burgent\\b|!!!", options: .regularExpression) != nil {
-            hints.append(NLPHint(label: "urgent", icon: "flame", chipColor: .plum))
-        }
-        if lower.contains("@work") {
-            hints.append(NLPHint(label: "Work", icon: "folder", chipColor: .sky))
-        }
-        if lower.contains("@home") {
-            hints.append(NLPHint(label: "Home", icon: "folder", chipColor: .sky))
-        }
-        return hints
-    }
-
-    // MARK: - Types
-
-    private enum FocusedSection: Hashable { case title, project }
-}
-
-// MARK: - Due & repeat enums
-
-enum DueOption: String, CaseIterable, Identifiable {
-    case today, tomorrow, weekend, nextweek, someday
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .today:    return "Today"
-        case .tomorrow: return "Tomorrow"
-        case .weekend:  return "Weekend"
-        case .nextweek: return "Next week"
-        case .someday:  return "Someday"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .today:    return "sun.max"
-        case .tomorrow: return "sunrise"
-        case .weekend:  return "cup.and.saucer"
-        case .nextweek: return "calendar.badge.clock"
-        case .someday:  return "infinity"
-        }
-    }
-
-    /// Resolve the user's coarse due choice into an absolute `Date`. Time
-    /// slot format matches the sheet's picker strings ("8:00 AM", "2:00 PM",
-    /// etc.). Someday is always nil (dateless).
-    func date(
-        timeSlot: String?,
-        calendar: Calendar = .current,
-        now: Date = Date()
-    ) -> Date? {
-        let startOfToday = calendar.startOfDay(for: now)
-        let base: Date?
-        switch self {
-        case .today:
-            base = startOfToday
-        case .tomorrow:
-            base = calendar.date(byAdding: .day, value: 1, to: startOfToday)
-        case .weekend:
-            // Next Saturday strictly after today. If today is Saturday, this
-            // lands on today+7 which reads as "this weekend just gone" — fine
-            // for Phase 3b; can refine once a custom date picker lands.
-            base = calendar.nextDate(
-                after: now,
-                matching: DateComponents(weekday: 7),  // Saturday
-                matchingPolicy: .nextTime
-            )
-        case .nextweek:
-            base = calendar.nextDate(
-                after: now,
-                matching: DateComponents(weekday: 2),  // Monday
-                matchingPolicy: .nextTime
-            )
-        case .someday:
-            return nil
-        }
-
-        guard let base else { return nil }
-
-        if let slot = timeSlot, let (hour, minute) = Self.parseTimeSlot(slot) {
-            return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: base)
-        }
-        return base
-    }
-
-    private static func parseTimeSlot(_ slot: String) -> (Int, Int)? {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = "h:mm a"
-        guard let date = fmt.date(from: slot) else { return nil }
-        let cal = Calendar(identifier: .gregorian)
-        return (cal.component(.hour, from: date), cal.component(.minute, from: date))
-    }
-
-    /// Classify an existing dueDate back into the coarse picker choice. Used
-    /// in edit mode to preselect the right pill. If the date is further out
-    /// than "this week", defaults to `.someday` — we don't have a specific
-    /// UI affordance for absolute dates yet.
-    static func fromDate(_ date: Date?, now: Date = Date(), calendar: Calendar = .current) -> DueOption {
-        guard let date else { return .today }
-        let startOfToday = calendar.startOfDay(for: now)
-        let targetDay = calendar.startOfDay(for: date)
-        let daysAhead = calendar.dateComponents([.day], from: startOfToday, to: targetDay).day ?? 0
-        if daysAhead == 0 { return .today }
-        if daysAhead == 1 { return .tomorrow }
-        // Next Saturday
-        if let nextSaturday = calendar.nextDate(after: now, matching: DateComponents(weekday: 7), matchingPolicy: .nextTime),
-           calendar.isDate(date, inSameDayAs: nextSaturday) {
-            return .weekend
-        }
-        // Next Monday
-        if let nextMonday = calendar.nextDate(after: now, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime),
-           calendar.isDate(date, inSameDayAs: nextMonday) {
-            return .nextweek
-        }
-        return .someday
-    }
-}
-
-enum RepeatOption: String, CaseIterable, Identifiable {
-    case never, daily, weekly, monthly
-    var id: String { rawValue }
-
-    /// Reverse the `repeats == .never ? nil : repeats.rawValue` encoding used
-    /// at save time. Anything unrecognized falls back to `.never`.
-    static func fromStored(_ stored: String?) -> RepeatOption {
-        guard let stored, let match = RepeatOption(rawValue: stored) else { return .never }
-        return match
-    }
-}
-
-// MARK: - Subviews
-
-private struct NLPHint: Identifiable {
-    let id = UUID()
-    let label: String
-    let icon: String
-    let chipColor: ChipColor
-}
-
-private struct StampPillButton: View {
-    var systemImage: String
-    var label: String
-    var active: Bool
-    var onTap: () -> Void
-
-    @Environment(\.plootPalette) private var palette
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(label)
-                    .font(.geist(size: 13, weight: 600))
-            }
-            .foregroundStyle(active ? palette.onPrimary : palette.fg1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(active ? palette.primary : palette.bgElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        active ? palette.borderInk : palette.border,
-                        lineWidth: 2
-                    )
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(palette.borderInk)
-                    .offset(y: active ? 2 : 0)
-                    .opacity(active ? 1 : 0)
-            )
-            .offset(y: active ? -1 : 0)
-        }
-        .buttonStyle(.plain)
-        .animation(Motion.springFast, value: active)
-    }
-}
-
-private struct TimePillButton: View {
-    var label: String
-    var active: Bool
-    var onTap: () -> Void
-
-    @Environment(\.plootPalette) private var palette
-
-    var body: some View {
-        Button(action: onTap) {
-            Text(label)
-                .font(.jetBrainsMono(size: 12, weight: 600))
-                .foregroundStyle(active ? palette.fgInverse : palette.fg1)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(active ? palette.borderInk : palette.bgElevated)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .strokeBorder(
-                            active ? palette.borderInk : palette.border,
-                            lineWidth: 1.5
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct PriorityTile: View {
-    var priority: Priority
-    var active: Bool
-    var onTap: () -> Void
-
-    @Environment(\.plootPalette) private var palette
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(ringColor, lineWidth: 2.5)
-                        .frame(width: 22, height: 22)
-                        .background(
-                            Circle()
-                                .fill(priority == .urgent && active ? palette.primary : .clear)
-                        )
-                    if !priority.emoji.isEmpty {
-                        Text(priority.emoji)
-                            .font(.system(size: 12))
-                            .offset(x: 10, y: -10)
-                    }
-                }
-                Text(priority.label)
-                    .font(.geist(size: 11, weight: 600))
-                    .foregroundStyle(active ? palette.fg1 : palette.fg2)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(palette.bgElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        active ? palette.borderInk : palette.border,
-                        lineWidth: 2
-                    )
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(palette.borderInk)
-                    .offset(y: active ? 2 : 0)
-                    .opacity(active ? 1 : 0)
-            )
-            .offset(y: active ? -1 : 0)
-        }
-        .buttonStyle(.plain)
-        .animation(Motion.springFast, value: active)
-    }
-
-    private var ringColor: Color {
-        switch priority {
-        case .normal: return palette.borderStrong
-        case .medium: return palette.butter500
-        case .high:   return palette.plum500
-        case .urgent: return palette.primary
-        }
-    }
-}
-
-private struct SettingBlock<Content: View>: View {
-    var icon: String
-    var label: String
-    var value: String
-    @ViewBuilder var content: () -> Content
-
-    @Environment(\.plootPalette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.fg2)
-                    .frame(width: 18)
-                Text(label)
-                    .font(.geist(size: 14, weight: 600))
-                    .foregroundStyle(palette.fg1)
-                Spacer()
-                Text(value)
-                    .font(.geist(size: 13, weight: 500))
-                    .foregroundStyle(palette.fg2)
-            }
-            content()
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.bgElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .strokeBorder(palette.border, lineWidth: 2)
-        )
-    }
-}
-
-/// Compact inline project picker: header shows current selection, tapping
-/// expands a searchable vertical list. Scales cleanly from 3 to 30 projects.
-private struct ProjectPicker: View {
-    @Binding var selection: String
-    @Binding var isOpen: Bool
-
-    @Query(sort: \PlootProject.order) private var projects: [PlootProject]
-    @State private var query: String = ""
-    @Environment(\.plootPalette) private var palette
-
-    private var allOptions: [PlootProject] {
-        [DemoData.inboxProject] + projects
-    }
-
-    private var current: PlootProject {
-        allOptions.first { $0.id == selection } ?? DemoData.inboxProject
-    }
-
-    private var filtered: [PlootProject] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty ? allOptions : allOptions.filter { $0.name.lowercased().contains(q) }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            if isOpen {
-                expanded
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.bgElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .strokeBorder(isOpen ? palette.borderInk : palette.border, lineWidth: 2)
-        )
-        .background(
-            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                .fill(palette.borderInk)
-                .offset(y: isOpen ? 2 : 0)
-                .opacity(isOpen ? 1 : 0)
-        )
-        .offset(y: isOpen ? -1 : 0)
-        .animation(Motion.easeOut(duration: 0.14), value: isOpen)
-        .clipped()
-    }
-
-    private var header: some View {
-        Button {
-            // Dismiss any focused text input (task title, note, subtask input)
-            // the moment the picker opens — user is done typing, moving on.
-            if !isOpen {
-                UIApplication.shared.sendAction(
-                    #selector(UIResponder.resignFirstResponder),
-                    to: nil, from: nil, for: nil
-                )
-            }
-            isOpen.toggle()
-            if !isOpen { query = "" }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "folder")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.fg2)
-                    .frame(width: 18)
-                Text("Project")
-                    .font(.geist(size: 14, weight: 600))
-                    .foregroundStyle(palette.fg1)
-                Spacer()
-                HStack(spacing: 6) {
-                    Text(current.emoji)
-                        .font(.system(size: 11))
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(current.tileColor.fill(palette: palette)))
-                    Text(current.name)
-                        .font(.geist(size: 13, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                        .lineLimit(1)
-                }
-                .padding(.leading, 4)
-                .padding(.trailing, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(palette.bgSunken)
-                )
-                .overlay(
-                    Capsule().strokeBorder(palette.border, lineWidth: 1.5)
-                )
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(palette.fg3)
-                    .rotationEffect(.degrees(isOpen ? 180 : 0))
-                    .animation(Motion.spring, value: isOpen)
-            }
-            .padding(14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var expanded: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(palette.fg3)
-                TextField("Search or type to create", text: $query)
-                    .font(.geist(size: 13, weight: 400))
-                    .foregroundStyle(palette.fg1)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .fill(palette.bgSunken)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .strokeBorder(palette.border, lineWidth: 1.5)
-            )
-
-            VStack(spacing: 2) {
-                ForEach(filtered) { project in
-                    Button {
-                        selection = project.id
-                        isOpen = false
-                        query = ""
-                        // Dismiss the search field keyboard if it was open.
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil, from: nil, for: nil
-                        )
-                    } label: {
-                        HStack(spacing: 10) {
-                            Text(project.emoji)
-                                .font(.system(size: 13))
-                                .frame(width: 26, height: 26)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(project.tileColor.fill(palette: palette))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .strokeBorder(palette.borderInk, lineWidth: 1.5)
-                                )
-                            Text(project.name)
-                                .font(.geist(size: 14, weight: selection == project.id ? 600 : 500))
-                                .foregroundStyle(selection == project.id ? palette.clay700 : palette.fg1)
-                            Spacer()
-                            if selection == project.id {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(palette.clay700)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                .fill(selection == project.id ? palette.clay100 : .clear)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if filtered.isEmpty && !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                        Text("Create \"\(query)\"")
-                            .font(.geist(size: 13, weight: 500))
-                            .foregroundStyle(palette.fg2)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                            .fill(palette.bgSunken)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                            .strokeBorder(
-                                palette.borderStrong,
-                                style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
-                            )
-                    )
-                }
-            }
-        }
-        .padding(10)
-        .overlay(alignment: .top) {
-            Rectangle().fill(palette.border).frame(height: 1.5)
-        }
-    }
-}
-
-// MARK: - Top-rounded sheet shape
-
-private struct RoundedCornersTopShape: Shape {
-    var radius: CGFloat = 28
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY + radius))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.minX + radius, y: rect.minY),
-            control: CGPoint(x: rect.minX, y: rect.minY)
-        )
-        p.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY + radius),
-            control: CGPoint(x: rect.maxX, y: rect.minY)
-        )
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.closeSubpath()
-        return p
-    }
-}
-
-private struct RoundedCornersTopBorder: Shape {
-    var radius: CGFloat = 28
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.minX + radius, y: rect.minY),
-            control: CGPoint(x: rect.minX, y: rect.minY)
-        )
-        p.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-        p.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY + radius),
-            control: CGPoint(x: rect.maxX, y: rect.minY)
-        )
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        return p
+        .padding(.bottom, Spacing.s2)
     }
 }
