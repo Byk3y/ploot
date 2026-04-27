@@ -140,6 +140,55 @@ enum TaskHelpers {
         return count
     }
 
+    /// Longest historical consecutive-day completion run.
+    static func bestStreak(
+        from tasks: [PlootTask],
+        calendar: Calendar = .current
+    ) -> Int {
+        let days = Set(
+            tasks
+                .filter { $0.isLive }
+                .compactMap { $0.completedAt }
+                .map { calendar.startOfDay(for: $0) }
+        ).sorted()
+        guard !days.isEmpty else { return 0 }
+
+        var best = 1
+        var run = 1
+        for i in 1..<days.count {
+            let prev = days[i - 1]
+            let curr = days[i]
+            if let next = calendar.date(byAdding: .day, value: 1, to: prev), next == curr {
+                run += 1
+                best = max(best, run)
+            } else {
+                run = 1
+            }
+        }
+        return best
+    }
+
+    enum StreakState { case onFire, atRisk, cold }
+
+    /// Folds the brigo-style streak status:
+    /// - `.cold` when the user has no active streak.
+    /// - `.atRisk` when there is a streak but today hasn't been secured yet.
+    /// - `.onFire` when there is a streak and today already has a completion.
+    static func streakState(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> StreakState {
+        let current = streak(from: tasks, asOf: now, calendar: calendar)
+        guard current > 0 else { return .cold }
+        let today = calendar.startOfDay(for: now)
+        let securedToday = tasks.contains { task in
+            guard task.isLive, let completedAt = task.completedAt else { return false }
+            return calendar.isDate(completedAt, inSameDayAs: today)
+        }
+        return securedToday ? .onFire : .atRisk
+    }
+
     // MARK: - Weekly chart
 
     struct DayBucket: Identifiable {
@@ -176,6 +225,66 @@ enum TaskHelpers {
                 isToday: offset == 0
             )
         }
+    }
+
+    /// Sum of the seven daily counts in `weeklyCounts`. Use for the Done
+    /// screen's "<n> this week" subtitle.
+    static func weekTotalDone(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        weeklyCounts(from: tasks, asOf: now, calendar: calendar)
+            .map(\.count)
+            .reduce(0, +)
+    }
+
+    /// Mon → Sun bars for the *current calendar week* (not trailing 7 days).
+    /// Forces Monday as the first weekday so the row reads M T W T F S S
+    /// regardless of locale.
+    static func currentWeekCounts(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar baseCalendar: Calendar = .current
+    ) -> [DayBucket] {
+        var calendar = baseCalendar
+        calendar.firstWeekday = 2 // Monday
+
+        let labelFmt = DateFormatter()
+        labelFmt.locale = Locale(identifier: "en_US")
+        labelFmt.dateFormat = "EEEEE"
+
+        // Walk back from `now` until we hit the configured firstWeekday (Mon).
+        var monday = calendar.startOfDay(for: now)
+        while calendar.component(.weekday, from: monday) != calendar.firstWeekday {
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: monday) else { break }
+            monday = prev
+        }
+
+        let today = calendar.startOfDay(for: now)
+        return (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: monday) else { return nil }
+            let count = tasks.filter { task in
+                guard task.isLive, let completedAt = task.completedAt else { return false }
+                return calendar.isDate(completedAt, inSameDayAs: day)
+            }.count
+            return DayBucket(
+                date: day,
+                label: labelFmt.string(from: day),
+                count: count,
+                isToday: calendar.isDate(day, inSameDayAs: today)
+            )
+        }
+    }
+
+    static func weekTotalDoneCalendarWeek(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        currentWeekCounts(from: tasks, asOf: now, calendar: calendar)
+            .map(\.count)
+            .reduce(0, +)
     }
 
     // MARK: - Avatar initials

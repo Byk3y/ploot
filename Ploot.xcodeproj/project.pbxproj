@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B100000000000000000000A0 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B100000000000000000000A2 /* Supabase */; };
+		C100000000000000000000A0 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = C100000000000000000000A2 /* Lottie */; };
 		FA6FCC102F9A5906006E40F0 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = FA6FCC0F2F9A5906006E40F0 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -36,6 +37,7 @@
 			files = (
 				FA6FCC102F9A5906006E40F0 /* RevenueCat in Frameworks */,
 				B100000000000000000000A0 /* Supabase in Frameworks */,
+				C100000000000000000000A0 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,6 +82,7 @@
 			packageProductDependencies = (
 				B100000000000000000000A2 /* Supabase */,
 				FA6FCC0F2F9A5906006E40F0 /* RevenueCat */,
+				C100000000000000000000A2 /* Lottie */,
 			);
 			productName = Ploot;
 			productReference = A1000000000000000000000B /* Ploot.app */;
@@ -113,6 +116,7 @@
 			packageReferences = (
 				B100000000000000000000A1 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				FA6FCC0E2F9A5906006E40F0 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+				C100000000000000000000A1 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 			);
 			productRefGroup = A1000000000000000000000E /* Products */;
 			projectDirPath = "";
@@ -359,6 +363,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		C100000000000000000000A1 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.0;
+			};
+		};
 		FA6FCC0E2F9A5906006E40F0 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm";
@@ -374,6 +386,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B100000000000000000000A1 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		C100000000000000000000A2 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C100000000000000000000A1 /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
 		};
 		FA6FCC0F2F9A5906006E40F0 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
