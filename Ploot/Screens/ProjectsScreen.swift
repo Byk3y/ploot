@@ -71,23 +71,32 @@ struct ProjectsScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(28)
         }
-        .alert("Delete this project?", isPresented: .init(
-            get: { deletingProject != nil },
-            set: { if !$0 { deletingProject = nil } }
-        )) {
-            Button("Cancel", role: .cancel) { deletingProject = nil }
-            Button("Delete", role: .destructive) {
-                if let project = deletingProject {
+        .sheet(item: $deletingProject) { project in
+            let count = taskCount(for: project.id)
+            DeleteProjectSheet(
+                project: project,
+                taskCount: count,
+                onKeepTasks: {
                     unassignTasks(ofProjectId: project.id)
                     withAnimation(Motion.spring) {
                         project.softDelete()
                         try? modelContext.save()
                     }
-                }
-                deletingProject = nil
-            }
-        } message: {
-            Text("Tasks in this project will stay, but lose their project label.")
+                    deletingProject = nil
+                },
+                onCascade: {
+                    cascadeDeleteTasks(ofProjectId: project.id)
+                    withAnimation(Motion.spring) {
+                        project.softDelete()
+                        try? modelContext.save()
+                    }
+                    deletingProject = nil
+                },
+                onCancel: { deletingProject = nil }
+            )
+            .presentationDetents([.height(count > 0 ? 420 : 320)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(28)
         }
     }
 
@@ -99,13 +108,27 @@ struct ProjectsScreen: View {
         allTasks.filter { $0.isLive && $0.projectId == project.id && $0.done }.count
     }
 
-    /// Mirror Supabase's ON DELETE SET NULL: any task referencing the
-    /// deleted project has its projectId nulled. Tasks keep all other
-    /// content.
+    private func taskCount(for projectId: String) -> Int {
+        allTasks.filter { $0.isLive && $0.projectId == projectId }.count
+    }
+
+    /// "Keep tasks" path: mirror Supabase's ON DELETE SET NULL. Tasks
+    /// referencing the project have projectId nulled and live on as
+    /// inbox-style standalone work.
     private func unassignTasks(ofProjectId id: String) {
-        for task in allTasks where task.projectId == id {
+        for task in allTasks where task.isLive && task.projectId == id {
             task.projectId = nil
             task.touch()
+        }
+    }
+
+    /// "Burn it all" path: soft-delete each task in the project so the
+    /// tombstone propagates to Supabase and any scheduled reminder is
+    /// canceled. Project soft-delete follows in the caller.
+    private func cascadeDeleteTasks(ofProjectId id: String) {
+        for task in allTasks where task.isLive && task.projectId == id {
+            ReminderService.shared.cancel(for: task)
+            task.softDelete()
         }
     }
 }
