@@ -6,26 +6,32 @@ import StoreKit
 
 /// Settings home. Pushed onto the root NavigationStack (not a sheet) so
 /// each section has room to grow into detail panels later.
+///
+/// The individual section row views (appearance, subscription,
+/// notifications, data, about, developer, account) live in
+/// SettingsScreen+Sections.swift. Properties below are intentionally
+/// internal so that extension can read them — same-file `private`
+/// doesn't span files.
 struct SettingsScreen: View {
     @Binding var theme: PlootTheme
     @Bindable var session: SessionManager
 
-    @Query private var allTasks: [PlootTask]
-    @Query private var allProjects: [PlootProject]
+    @Query var allTasks: [PlootTask]
+    @Query var allProjects: [PlootProject]
 
-    @AppStorage("displayName") private var displayName: String = "You"
-    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var showingTestScreen: Bool = false
-    @State private var confirmingWipe: Bool = false
-    @State private var confirmingSignOut: Bool = false
-    @State private var nameSyncTask: Task<Void, Never>? = nil
-    @State private var showingManageSubscriptions: Bool = false
+    @AppStorage("displayName") var displayName: String = "You"
+    @State var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State var showingTestScreen: Bool = false
+    @State var confirmingWipe: Bool = false
+    @State var confirmingSignOut: Bool = false
+    @State var nameSyncTask: Task<Void, Never>? = nil
+    @State var showingManageSubscriptions: Bool = false
 
-    @Bindable private var subscription = SubscriptionManager.shared
+    @Bindable var subscription = SubscriptionManager.shared
 
-    @Environment(\.plootPalette) private var palette
+    @Environment(\.plootPalette) var palette
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) var modelContext
 
     var body: some View {
         ScreenFrame(
@@ -76,44 +82,6 @@ struct SettingsScreen: View {
         }
     }
 
-    // MARK: - Account
-
-    private var accountRow: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Signed in")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(session.currentUser?.email ?? "—")
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.vertical, Spacing.s3)
-
-            rowDivider
-
-            Button(action: { confirmingSignOut = true }) {
-                HStack {
-                    Text("Sign out")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.danger)
-                    Spacer()
-                    Image(systemName: "arrow.right.square")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.danger)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     // MARK: - Profile
 
     private var profileSection: some View {
@@ -155,7 +123,7 @@ struct SettingsScreen: View {
 
     // MARK: - Section scaffolding
 
-    private func section<Content: View>(
+    func section<Content: View>(
         _ title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -181,274 +149,16 @@ struct SettingsScreen: View {
         }
     }
 
-    private var rowDivider: some View {
+    var rowDivider: some View {
         Rectangle()
             .fill(palette.border)
             .frame(height: 1)
             .padding(.horizontal, Spacing.s4)
     }
 
-    // MARK: - Appearance
-
-    private var appearanceRow: some View {
-        HStack {
-            Text("Theme")
-                .font(.geist(size: 15, weight: 500))
-                .foregroundStyle(palette.fg1)
-            Spacer()
-            HStack(spacing: 0) {
-                ForEach(PlootTheme.allCases) { t in
-                    Button {
-                        withAnimation(Motion.spring) { theme = t }
-                    } label: {
-                        Text(t.rawValue)
-                            .font(.geist(size: 12, weight: 600))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(theme == t ? palette.onPrimary : palette.fg2)
-                            .background(Capsule().fill(theme == t ? palette.primary : .clear))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(3)
-            .background(Capsule().fill(palette.bgSunken))
-            .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
-        }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
-    }
-
-    // MARK: - Subscription
-
-    private var subscriptionRow: some View {
-        Button(action: openManage) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ploot Pro")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(subscriptionSubtitle)
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Text(subscriptionStatusLabel)
-                    .font(.geist(size: 12, weight: 600))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .foregroundStyle(subscription.isActive ? palette.onPrimary : palette.fg2)
-                    .background(
-                        Capsule().fill(subscription.isActive ? palette.primary : palette.bgSunken)
-                    )
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
-    }
-
-    private var subscriptionStatusLabel: String {
-        subscription.isActive ? "Active" : "Inactive"
-    }
-
-    private var subscriptionSubtitle: String {
-        if subscription.isActive {
-            return "tap to manage plan, cancel, or switch to yearly"
-        } else {
-            return "your trial or subscription isn't active"
-        }
-    }
-
-    private func openManage() {
-        if subscription.isActive {
-            showingManageSubscriptions = true
-        } else {
-            // No active subscription — StoreKit's manage sheet would
-            // just say "nothing to manage". Kick off a refresh + open
-            // anyway so the user sees the status from Apple directly.
-            Task { await subscription.loadProducts() }
-            showingManageSubscriptions = true
-        }
-    }
-
-    // MARK: - Notifications
-
-    private var notificationsRow: some View {
-        Button(action: openSystemSettings) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Reminders")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(statusSubtitle(notificationStatus))
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Text(statusLabel(notificationStatus))
-                    .font(.geist(size: 12, weight: 600))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .foregroundStyle(statusForeground(notificationStatus))
-                    .background(Capsule().fill(statusBackground(notificationStatus)))
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
-    }
-
-    private func statusLabel(_ s: UNAuthorizationStatus) -> String {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return "On"
-        case .denied: return "Off"
-        case .notDetermined: return "Not asked"
-        @unknown default: return "—"
-        }
-    }
-
-    private func statusSubtitle(_ s: UNAuthorizationStatus) -> String {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return "you'll get a banner when a task is due"
-        case .denied: return "tap to re-enable in Settings"
-        case .notDetermined: return "toggle Remind me on any task to get asked"
-        @unknown default: return ""
-        }
-    }
-
-    private func statusForeground(_ s: UNAuthorizationStatus) -> Color {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return palette.forest700
-        case .denied: return palette.plum500
-        default: return palette.fg2
-        }
-    }
-
-    private func statusBackground(_ s: UNAuthorizationStatus) -> Color {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return palette.forest100
-        case .denied: return palette.plum100
-        default: return palette.bgSunken
-        }
-    }
-
-    @MainActor
-    private func refreshNotificationStatus() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        notificationStatus = settings.authorizationStatus
-    }
-
-    private func openSystemSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
-    }
-
-    // MARK: - Data
-
-    private var dataRows: some View {
-        VStack(spacing: 0) {
-            labeledRow(label: "Tasks", value: "\(allTasks.count)")
-            rowDivider
-            labeledRow(label: "Projects", value: "\(allProjects.count)")
-            rowDivider
-            Button(action: { confirmingWipe = true }) {
-                HStack {
-                    Text("Delete all data")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.danger)
-                    Spacer()
-                    Image(systemName: "trash")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.danger)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func wipeAllData() {
-        // Soft-delete everything. softDelete() tombstones + pushes to
-        // Supabase so the deletion propagates to other devices. Hard
-        // delete would just get re-pulled on the next foreground.
-        for task in allTasks {
-            ReminderService.shared.cancel(for: task)
-            for sub in task.subtasks where sub.isLive {
-                sub.softDelete()
-            }
-            if task.isLive {
-                task.softDelete()
-            }
-        }
-        for project in allProjects where project.isLive {
-            project.softDelete()
-        }
-        try? modelContext.save()
-    }
-
-    // MARK: - About
-
-    private var aboutRows: some View {
-        VStack(spacing: 0) {
-            labeledRow(label: "Version", value: appVersion)
-            rowDivider
-            Link(destination: URL(string: "https://github.com/Byk3y/ploot")!) {
-                HStack {
-                    Text("Source on GitHub")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.fg3)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
-            }
-        }
-    }
-
-    private var appVersion: String {
-        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
-        return "\(short) (\(build))"
-    }
-
-    // MARK: - Developer
-
-    private var developerRow: some View {
-        Button(action: { showingTestScreen = true }) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Design token test screen")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text("Phase 1 regression harness")
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
-    }
-
     // MARK: - Row primitive
 
-    private func labeledRow(label: String, value: String) -> some View {
+    func labeledRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
                 .font(.geist(size: 15, weight: 500))
