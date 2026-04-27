@@ -84,11 +84,12 @@ extension QuickAddSheet {
     }
 
     var projectPill: some View {
-        MetaPill(
+        let isUnassigned = projectId == "inbox"
+        return MetaPill(
             icon: "folder",
-            label: currentProject.name,
-            emoji: currentProject.emoji,
-            highlight: projectId != "inbox",
+            label: isUnassigned ? "Project" : currentProject.name,
+            emoji: isUnassigned ? nil : currentProject.emoji,
+            highlight: !isUnassigned,
             pulseTrigger: projectPulse
         ) {
             withAnimation(Motion.spring) {
@@ -102,17 +103,17 @@ extension QuickAddSheet {
         }
     }
 
-    /// Toggles between Tier 1 (compact) and Tier 2 (large). Visual swaps
-    /// between an ellipsis (⋯) when collapsed and a chevron-down when
-    /// expanded so the affordance reads as "more / less" instead of just
-    /// "more options."
+    /// Toggles between Tier 1 (compact) and Tier 2 (large). Chevron points
+    /// in the direction the sheet will travel: up to expand, down to
+    /// collapse. Reads as a directional affordance rather than a generic
+    /// "more" menu.
     var morePill: some View {
         Button {
             withAnimation(Motion.spring) {
                 detent = detent == .large ? .height(Self.compactDetentHeight) : .large
             }
         } label: {
-            Image(systemName: detent == .large ? "chevron.down" : "ellipsis")
+            Image(systemName: detent == .large ? "chevron.down" : "chevron.up")
                 .font(.system(size: 13, weight: .heavy))
                 .foregroundStyle(palette.fg2)
                 .frame(width: 38, height: 32)
