@@ -59,7 +59,6 @@ extension QuickAddSheet {
         HStack(spacing: Spacing.s2) {
             datePill
             projectPill
-            morePill
             Spacer(minLength: 0)
         }
     }
@@ -101,33 +100,6 @@ extension QuickAddSheet {
                 }
             }
         }
-    }
-
-    /// Toggles between Tier 1 (compact) and Tier 2 (large). Chevron points
-    /// in the direction the sheet will travel: up to expand, down to
-    /// collapse. Reads as a directional affordance rather than a generic
-    /// "more" menu.
-    var morePill: some View {
-        Button {
-            withAnimation(Motion.spring) {
-                detent = detent == .large ? .height(Self.compactDetentHeight) : .large
-            }
-        } label: {
-            Image(systemName: detent == .large ? "chevron.down" : "chevron.up")
-                .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(palette.fg2)
-                .frame(width: 38, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(palette.bgElevated)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(palette.border, lineWidth: 1.5)
-                )
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: detent)
     }
 
     var dateLabelText: String {

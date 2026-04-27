@@ -56,7 +56,6 @@ struct QuickAddSheet: View {
 
     // MARK: - UI state
 
-    @State var detent: PresentationDetent
     @State var showNote: Bool
     @State var showSubtasks: Bool
     @State var datePickerOpen: Bool = false
@@ -112,10 +111,6 @@ struct QuickAddSheet: View {
             .sorted { $0.order < $1.order } ?? []
         _subtasks = State(initialValue: initialSubs)
 
-        // Edit mode opens at Tier 2 — fields are populated and the user is
-        // here to tweak something specific. New tasks open at Tier 1 and
-        // expand only on demand.
-        _detent = State(initialValue: isEditing ? .large : .height(Self.compactDetentHeight))
         _showNote = State(initialValue: !(existingTask?.note?.isEmpty ?? true))
         _showSubtasks = State(initialValue: !initialSubs.isEmpty)
 
@@ -147,15 +142,6 @@ struct QuickAddSheet: View {
         "Call mom — she misses you"
     ]
 
-    /// Tier 1 detent height. Sized to fit title + meta pills + "Break
-    /// it down" affordance with breathing room.
-    ///
-    /// Caveat: when the keyboard is up, iOS overrides this and expands
-    /// the sheet to fill the space above the keyboard. The "dead zone"
-    /// of empty space between content and keyboard top is an iOS sheet
-    /// behavior we can't override without ditching `.sheet` for a
-    /// custom overlay-based presentation.
-    static let compactDetentHeight: CGFloat = 320
 
     // MARK: - Body
 
@@ -169,13 +155,7 @@ struct QuickAddSheet: View {
                     metaRow
                     inlinePickerArea
                     subtaskArea
-                    if detent == .large {
-                        detailsCard
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity
-                            ))
-                    }
+                    detailsCard
                     Color.clear.frame(height: 40)
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -192,10 +172,12 @@ struct QuickAddSheet: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedCornersTopShape())
-        // Tap-outside-to-close for the inline pickers. Buttons consume
-        // their own taps, so picker rows / pills / save / cancel still
-        // work — only taps in empty space (padding, dead zone) bubble
-        // here and dismiss whichever picker is open.
+        // Single .large detent — swipe-down dismisses directly without
+        // a half-way stop. iOS auto-expands for the keyboard anyway, so
+        // a smaller intermediate detent only added a dead-zone detour.
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(28)
         .contentShape(Rectangle())
         .onTapGesture {
             if datePickerOpen || projectPickerOpen {
@@ -205,10 +187,6 @@ struct QuickAddSheet: View {
                 }
             }
         }
-        .presentationDetents([.height(Self.compactDetentHeight), .large], selection: $detent)
-        .presentationDragIndicator(.hidden)
-        .presentationCornerRadius(28)
-        .animation(Motion.spring, value: detent)
         .animation(Motion.spring, value: datePickerOpen)
         .animation(Motion.spring, value: projectPickerOpen)
         .animation(Motion.spring, value: showNote)
