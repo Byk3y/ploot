@@ -70,6 +70,19 @@ extension QuickAddSheet {
                 due = newDue
                 customDate = nil
                 datePulse &+= 1
+            } else if newDue == nil, let weekdayDate = Self.parseWeekday(from: lower) {
+                // No bucket matched — try weekday names ("thursday", "thu",
+                // "fri", etc.) and resolve to the next occurrence. Stored
+                // as customDate so submit picks it up; due stays .someday
+                // as a marker.
+                let cal = Calendar.current
+                let cleaned = cal.startOfDay(for: weekdayDate)
+                let alreadySet = customDate.map { cal.isDate(cleaned, inSameDayAs: $0) } ?? false
+                if !alreadySet {
+                    customDate = cleaned
+                    due = .someday
+                    datePulse &+= 1
+                }
             }
 
             if let parsed = Self.parseTime(from: lower), parsed != time {
@@ -103,6 +116,32 @@ extension QuickAddSheet {
                 }
             }
         }
+    }
+
+    /// Match weekday names ("thursday", "thu", "fri", "monday", "mon",
+    /// etc.) and return the next occurrence as a Date. Returns nil if
+    /// no weekday word is present. Plain English only — no localization
+    /// here, matching the rest of the NLP parser's English-only patterns.
+    static func parseWeekday(from text: String, now: Date = Date(), calendar: Calendar = .current) -> Date? {
+        let table: [(pattern: String, weekday: Int)] = [
+            (#"\bsunday\b|\bsun\b"#, 1),
+            (#"\bmonday\b|\bmon\b"#, 2),
+            (#"\btuesday\b|\btues?\b"#, 3),
+            (#"\bwednesday\b|\bwed\b"#, 4),
+            (#"\bthursday\b|\bthurs?\b"#, 5),
+            (#"\bfriday\b|\bfri\b"#, 6),
+            (#"\bsaturday\b|\bsat\b"#, 7)
+        ]
+        for entry in table {
+            if text.range(of: entry.pattern, options: .regularExpression) != nil {
+                return calendar.nextDate(
+                    after: now,
+                    matching: DateComponents(weekday: entry.weekday),
+                    matchingPolicy: .nextTime
+                )
+            }
+        }
+        return nil
     }
 
     static func parseTime(from text: String) -> String? {
