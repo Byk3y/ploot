@@ -65,6 +65,47 @@ enum TaskHelpers {
         tasks.filter { $0.isLive }
     }
 
+    // MARK: - Lateness
+
+    /// Past its due date *right now* (regardless of whether it crossed a
+    /// day boundary). Same-day past-time tasks count too — a task due
+    /// "today 3 pm" at 5 pm is late. Done tasks never count as late.
+    static func isLate(_ task: PlootTask, asOf now: Date = Date()) -> Bool {
+        guard !task.done, let due = task.dueDate else { return false }
+        return due < now
+    }
+
+    /// Relative-time copy for tasks that crossed a day boundary
+    /// ("yesterday", "2d late", "3w late"). Returns nil for tasks that
+    /// are only same-day late, or not late, or have no due date —
+    /// same-day late just gets the regular display label with a warm
+    /// tint applied at the row level.
+    static func lateLabel(
+        for task: PlootTask,
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String? {
+        guard !task.done, let due = task.dueDate else { return nil }
+        let startOfToday = calendar.startOfDay(for: now)
+        guard due < startOfToday else { return nil }
+
+        let dueDay = calendar.startOfDay(for: due)
+        let daysLate = calendar.dateComponents([.day], from: dueDay, to: startOfToday).day ?? 0
+        switch daysLate {
+        case 1:
+            return "yesterday"
+        case 2...6:
+            return "\(daysLate)d late"
+        case 7...29:
+            return "\(daysLate / 7)w late"
+        default:
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US")
+            fmt.dateFormat = "MMM d"
+            return fmt.string(from: due)
+        }
+    }
+
     // MARK: - Display labels
 
     /// Human-friendly "Today, 2:00 PM" / "Yesterday" / "Thu" / "Apr 29"
@@ -301,15 +342,87 @@ enum TaskHelpers {
         return letters.joined().uppercased()
     }
 
-    // MARK: - Today subtitle
+    // MARK: - Today progress
 
-    static func todaySubtitle(from tasks: [PlootTask], asOf now: Date = Date()) -> String {
-        let today = self.tasks(in: .today, from: tasks, asOf: now)
-        let total = today.count
-        let done = today.filter { $0.done }.count
-        if total == 0 {
+    /// Tasks whose effective day is today, *regardless of completion*. This
+    /// is the right denominator for "X of Y today" — done tasks must stay
+    /// counted so the ratio actually reflects progress.
+    static func todayTaskSet(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [PlootTask] {
+        tasks.filter { task in
+            guard task.isLive else { return false }
+            if let due = task.dueDate {
+                return calendar.isDate(due, inSameDayAs: now)
+            }
+            // Dateless task parked in the Today bucket counts too.
+            return task.section == .today
+        }
+    }
+
+    /// (done, total) for the today-due set. Replaces the old subtitle math
+    /// which excluded done tasks from the denominator and always reported
+    /// `done = 0`.
+    static func todayProgress(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> (done: Int, total: Int) {
+        let set = todayTaskSet(from: tasks, asOf: now, calendar: calendar)
+        return (done: set.filter(\.done).count, total: set.count)
+    }
+
+    // MARK: - Today voice line
+
+    /// Time-of-day greeting (no name appended). Empty when in late-night
+    /// hours so callers can fall through to a different copy register.
+    static func timeOfDayGreeting(asOf now: Date = Date(), calendar: Calendar = .current) -> String {
+        let hour = calendar.component(.hour, from: now)
+        switch hour {
+        case 5..<12:  return "Morning"
+        case 12..<17: return "Afternoon"
+        case 17..<22: return "Evening"
+        default:      return "Late one"
+        }
+    }
+
+    /// Single-line motivational header for the Today screen. Voice-driven,
+    /// not a stat — the progress strip carries the numbers. Falls back to
+    /// the original empty-list zinger when the user has nothing scheduled.
+    static func todayVoiceLine(
+        from tasks: [PlootTask],
+        displayName: String,
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
+        let progress = todayProgress(from: tasks, asOf: now, calendar: calendar)
+        let greeting = timeOfDayGreeting(asOf: now, calendar: calendar)
+        let firstName = displayName
+            .split(separator: " ")
+            .first
+            .map(String.init) ?? displayName
+        let useName = !firstName.isEmpty
+            && firstName.lowercased() != "you"
+            && firstName != "?"
+        let prefix = useName ? "\(greeting), \(firstName)." : "\(greeting)."
+
+        if progress.total == 0 {
             return "Nothing on the list. Suspicious."
         }
-        return "\(done) of \(total) crushed. Keep going."
+        let remaining = progress.total - progress.done
+        switch remaining {
+        case 0:
+            return "All clear. Take a victory lap."
+        case 1:
+            return "\(prefix) 1 to go."
+        default:
+            // At/over halfway → warmer copy. Below halfway → keep it factual.
+            if progress.done * 2 >= progress.total && progress.done > 0 {
+                return "\(prefix) Halfway there."
+            }
+            return "\(prefix) \(remaining) to go."
+        }
     }
 }

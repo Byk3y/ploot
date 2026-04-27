@@ -24,7 +24,7 @@ struct TodayScreen: View {
         ScreenFrame(
             title: "Today",
             titleSuffix: AnyView(todaySuffix),
-            subtitle: TaskHelpers.todaySubtitle(from: allTasks),
+            subtitle: TaskHelpers.todayVoiceLine(from: allTasks, displayName: displayName),
             trailing: { trailingAvatar },
             content: { list }
         )
@@ -121,30 +121,36 @@ struct TodayScreen: View {
         let goal = max(1, dailyGoal)
         let pct = min(1.0, Double(doneToday) / Double(goal))
 
-        return VStack(spacing: Spacing.s3) {
-            HStack(alignment: .firstTextBaseline) {
+        return HStack(alignment: .center, spacing: Spacing.s3) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(doneToday)")
                         .font(.fraunces(size: 28, weight: 600, opsz: 72, soft: 40))
                         .foregroundStyle(palette.fg1)
                         .contentTransition(.numericText())
                         .animation(Motion.spring, value: doneToday)
-                    Text("of \(goal) crushed")
+                    Text(progressSecondary(doneToday: doneToday, goal: goal))
                         .font(.geist(size: 13, weight: 500))
-                        .foregroundStyle(palette.fg3)
+                        .foregroundStyle(doneToday >= goal ? palette.clay500 : palette.fg3)
+                        .contentTransition(.opacity)
                 }
-                Spacer()
-                if trackStreak {
-                    streakChip
-                }
+                ProgressBar(value: pct)
             }
-            ProgressBar(value: pct)
+            if trackStreak {
+                streakBadge
+            }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s4)
     }
 
-    private var streakChip: some View {
+    private func progressSecondary(doneToday: Int, goal: Int) -> String {
+        if doneToday < goal { return "of \(goal)" }
+        if doneToday == goal { return "done · goal!" }
+        return "done · +\(doneToday - goal)"
+    }
+
+    private var streakBadge: some View {
         // Live-streak logic mirrors StreakManager.displayCount but we
         // compute inline so the @AppStorage observation triggers redraws
         // when streakLastDate changes.
@@ -157,23 +163,18 @@ struct TodayScreen: View {
             )
             return streakLastDate == yesterday ? streakCount : 0
         }()
+        let isAtRisk = displayCount > 0 && streakLastDate != UserPrefs.dateKey()
+        let isCold = displayCount == 0
+        let isDimmed = isCold || isAtRisk
 
-        return HStack(spacing: 4) {
-            Text("🔥")
-                .font(.system(size: 14))
-                .opacity(displayCount > 0 ? 1 : 0.35)
+        return HStack(spacing: 2) {
+            FireLottieView(isDimmed: isDimmed)
+                .frame(width: 36, height: 36)
             Text("\(displayCount)")
-                .font(.geist(size: 13, weight: 700))
-                .foregroundStyle(displayCount > 0 ? palette.fg1 : palette.fg3)
+                .font(.fraunces(size: 22, weight: 600))
+                .foregroundStyle(isDimmed ? palette.fg3 : palette.fg1)
+                .contentTransition(.numericText(value: Double(displayCount)))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(
-            Capsule().fill(palette.bgElevated)
-        )
-        .overlay(
-            Capsule().strokeBorder(palette.border, lineWidth: 1.5)
-        )
     }
 
     @ViewBuilder
@@ -184,12 +185,56 @@ struct TodayScreen: View {
             onToggle: { task.setDone($0) },
             onOpen: { onOpen(task) },
             onEdit: { editingTask = task },
-            onDelete: { deletingTask = task }
+            onDelete: { deletingTask = task },
+            onRescheduleToday: { rescheduleToToday(task) }
         )
         .transition(.asymmetric(
             insertion: .move(edge: .leading).combined(with: .opacity),
             removal: .move(edge: .trailing).combined(with: .opacity)
         ))
+    }
+
+    /// Push the task's dueDate forward — to *today* when it's a past-day
+    /// overdue task, or to *tomorrow* when it's same-day late (already
+    /// today, just past the time). Either way, time-of-day is preserved
+    /// so a "9 am call" stays at 9 am, just on a later day.
+    private func rescheduleToToday(_ task: PlootTask) {
+        let cal = Calendar.current
+        let now = Date()
+        let startOfToday = cal.startOfDay(for: now)
+
+        // Same-day past-time tasks have no `lateLabel` (it returns nil
+        // for that case) — those push to tomorrow. Past-day overdue
+        // tasks push to today.
+        let isSameDayLate = task.dueDate.map { due in
+            cal.isDate(due, inSameDayAs: now) && due < now
+        } ?? false
+        let targetDay: Date = {
+            if isSameDayLate {
+                return cal.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
+            }
+            return startOfToday
+        }()
+
+        let newDate: Date
+        if let original = task.dueDate {
+            let h = cal.component(.hour, from: original)
+            let m = cal.component(.minute, from: original)
+            newDate = cal.date(bySettingHour: h, minute: m, second: 0, of: targetDay) ?? targetDay
+        } else {
+            newDate = targetDay
+        }
+
+        withAnimation(Motion.spring) {
+            task.dueDate = newDate
+            // Past-day → today section. Same-day-late pushed to
+            // tomorrow → later section.
+            task.section = isSameDayLate ? .later : .today
+            task.touch()
+            try? modelContext.save()
+        }
+        ReminderService.shared.schedule(for: task)
+        SyncService.shared.push(task: task)
     }
 
     private static func dateText() -> String {

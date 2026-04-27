@@ -7,6 +7,9 @@ struct TaskRow: View {
     var onOpen: () -> Void
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    /// Optional reschedule-to-today action. When provided AND the task
+    /// is late, a "Move to today" context-menu item is shown.
+    var onRescheduleToday: (() -> Void)? = nil
 
     @Environment(\.plootPalette) private var palette
     /// Local predictive flag — flipped the instant the user taps the
@@ -75,6 +78,18 @@ struct TaskRow: View {
                 Label(task.done ? "Mark as not done" : "Mark as done",
                       systemImage: task.done ? "circle" : "checkmark.circle")
             }
+            if TaskHelpers.isLate(task), let onRescheduleToday {
+                // Past-day overdue → move to today. Same-day past-time
+                // → move to tomorrow (today is already today; the
+                // user's intent is clearly "push it forward").
+                let isPastDay = TaskHelpers.lateLabel(for: task) != nil
+                Button(action: onRescheduleToday) {
+                    Label(
+                        isPastDay ? "Move to today" : "Move to tomorrow",
+                        systemImage: isPastDay ? "sun.max" : "arrow.right.circle"
+                    )
+                }
+            }
             if let onEdit {
                 Button(action: onEdit) {
                     Label("Edit", systemImage: "pencil")
@@ -92,17 +107,39 @@ struct TaskRow: View {
         TaskHelpers.displayLabel(for: task) != nil || task.projectId != nil || !task.tags.isEmpty
     }
 
+    /// Prefer the relative-late phrase ("yesterday", "2d late") over the
+    /// raw display label when the task crossed a day boundary. Same-day
+    /// late tasks fall through to the regular label and rely on the warm
+    /// tint alone for the cue. Takes `asOf` so the TimelineView wrapper
+    /// can re-evaluate against the live clock.
+    private func displayedDateLabel(asOf date: Date) -> String? {
+        TaskHelpers.lateLabel(for: task, asOf: date)
+            ?? TaskHelpers.displayLabel(for: task, asOf: date)
+    }
+
     private var metaRow: some View {
         HStack(spacing: 6) {
-            if let dueLabel = TaskHelpers.displayLabel(for: task) {
-                let isOverdue = TaskHelpers.derivedSection(for: task) == .overdue
-                HStack(spacing: 3) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text(dueLabel)
-                        .font(.geist(size: 12, weight: 500))
+            // SwiftUI doesn't auto-redraw when wall-clock time crosses a
+            // task's dueDate, so the row would otherwise sit there with
+            // its pre-due styling until the user did something to force a
+            // re-render. TimelineView ticks every 60s and feeds the
+            // current time into `isLate`/`displayedDateLabel`, so the
+            // tint flips to clay automatically the minute a task goes
+            // late.
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                if let dueLabel = displayedDateLabel(asOf: context.date) {
+                    let isLate = TaskHelpers.isLate(task, asOf: context.date)
+                    HStack(spacing: 3) {
+                        Image(systemName: isLate ? "clock.badge.exclamationmark" : "calendar")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(dueLabel)
+                            .font(.geist(size: 12, weight: 500))
+                    }
+                    // Warm clay tint for any late task — past-day overdue
+                    // or same-day past-time. Brand-appropriate "look at
+                    // this" cue without the danger-red of a system error.
+                    .foregroundStyle(isLate ? palette.clay500 : palette.fg2)
                 }
-                .foregroundStyle(isOverdue ? palette.danger : palette.fg2)
             }
 
             if let project {
