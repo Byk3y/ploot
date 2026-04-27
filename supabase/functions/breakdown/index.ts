@@ -113,7 +113,7 @@ Maximum 3 questions total across the conversation (count the prior answers). Aft
 Question categories — pick at most ONE per turn:
 - Approach (DIY vs pro, scratch vs template, manual vs automated)
 - Scope (quick pass vs full redo, draft vs polished)
-- Deadline (only if timeline changes the list)
+- Deadline — ASK when the title implies a real-world end date (party, trip, launch, presentation, exam, interview, demo, deadline, recital, wedding, move). Also ask if user's daily_goal is 1–3 and the project will likely produce 5+ tasks (the drip alone would take >5 days). Choices should be concrete windows: "this weekend", "this week", "next 2 weeks", "longer / no rush". Skip when the project is open-ended.
 - Constraint (budget, tools, starting assets)
 - Audience (self vs work vs client)
 - Format (category-defining — podcast format, trip type, party style)

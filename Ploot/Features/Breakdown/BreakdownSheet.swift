@@ -28,6 +28,10 @@ struct BreakdownSheet: View {
     @State var completedCount: Int = 0
     @State var finishedHaptic: Int = 0
     @State var donePulse: Bool = false
+    /// User-selected timeline window for the streamed tasks. Defaults to
+    /// `.drip` (existing one-at-a-time behavior). Other values trigger
+    /// `applyTimeline(...)` which re-stamps every task's dueDate.
+    @State var timelineMode: TimelineMode = .drip
     /// Captured when the sheet opens so every task in a single breakdown
     /// batch shares a base timestamp — insertion order then becomes the
     /// only distinguishing factor in createdAt.

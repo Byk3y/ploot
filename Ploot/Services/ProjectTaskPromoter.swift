@@ -36,9 +36,14 @@ enum ProjectTaskPromoter {
             .sorted { $0.createdAt > $1.createdAt }
             .first
         guard let next else { return }
+        // If the user already scheduled this task via the breakdown
+        // timeline picker, leave its dueDate alone — promoting it to
+        // "today, 30 minutes from now" would silently overwrite their
+        // intent. The task will surface naturally when its date hits.
+        if next.dueDate != nil { return }
 
         next.section = .today
-        next.dueDate = todayMorning()
+        next.dueDate = nextSensibleDueDate()
         next.remindMe = true
         next.touch()
         try? context.save()
@@ -46,9 +51,17 @@ enum ProjectTaskPromoter {
         SyncService.shared.push(task: next)
     }
 
-    private static func todayMorning() -> Date {
+    /// Always strictly in the future so reminders fire and the displayed
+    /// time isn't already past. Mirrors `BreakdownSheet.firstTaskDueDate`.
+    private static func nextSensibleDueDate(now: Date = Date()) -> Date {
         let cal = Calendar.current
-        let start = cal.startOfDay(for: Date())
-        return cal.date(byAdding: .hour, value: 9, to: start) ?? start
+        let startOfToday = cal.startOfDay(for: now)
+        let nineAM = cal.date(byAdding: .hour, value: 9, to: startOfToday) ?? startOfToday
+        if now < nineAM { return nineAM }
+        let minute = cal.component(.minute, from: now)
+        let bump = minute < 30 ? (30 - minute) : (60 - minute)
+        let rounded = cal.date(byAdding: .minute, value: bump, to: now) ?? now
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: rounded)
+        return cal.date(from: comps) ?? rounded
     }
 }

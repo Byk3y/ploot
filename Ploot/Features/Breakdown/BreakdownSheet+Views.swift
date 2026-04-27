@@ -57,21 +57,82 @@ extension BreakdownSheet {
     var streamedTaskList: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             ForEach(streamedTasks) { task in
-                streamedRow(task)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .move(edge: .trailing).combined(with: .opacity)
-                    ))
+                SwipeToReveal {
+                    streamedRow(task)
+                } onDelete: {
+                    removeStreamedTask(task)
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
             }
             if case .streamingTasks = phase {
                 thinkingShimmer
                     .padding(.top, Spacing.s1)
             }
             if case .finished = phase {
+                timelinePicker
+                    .padding(.top, Spacing.s3)
                 completionChip
                     .padding(.top, Spacing.s2)
             }
         }
+    }
+
+    // MARK: - Timeline picker
+
+    /// Post-stream pacing picker. Default is `.drip` (no change to the
+    /// existing one-at-a-time behavior). Picking anything else re-stamps
+    /// every streamed task's dueDate via `applyTimeline(...)`.
+    var timelinePicker: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: 6) {
+                Text("📅").font(.system(size: 13))
+                Text("timeline")
+                    .font(.jetBrainsMono(size: 11, weight: 700))
+                    .tracking(11 * 0.08)
+                    .textCase(.uppercase)
+                    .foregroundStyle(palette.fg2)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(timelineModeOptions, id: \.self) { mode in
+                        timelineChip(for: mode)
+                    }
+                }
+            }
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private var timelineModeOptions: [TimelineMode] {
+        [.drip, .thisWeekend, .thisWeek, .nextTwoWeeks]
+    }
+
+    private func timelineChip(for mode: TimelineMode) -> some View {
+        let isSelected = timelineMode == mode
+        return Button {
+            withAnimation(Motion.spring) {
+                timelineMode = mode
+            }
+            applyTimeline(mode)
+        } label: {
+            Text(mode.label)
+                .font(.geist(size: 12, weight: 600))
+                .foregroundStyle(isSelected ? palette.onPrimary : palette.fg1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(isSelected ? palette.primary : palette.bgElevated)
+                )
+                .overlay(
+                    Capsule().strokeBorder(palette.borderInk, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isSelected)
     }
 
     func streamedRow(_ task: StreamedTask) -> some View {
