@@ -6,6 +6,17 @@ This file is loaded into Claude's context whenever it opens this repo. Keep it s
 
 Native iOS task manager in **SwiftUI**, iOS 17+. Warm/playful brand: clay orange on cream, Fraunces serif + Geist sans, stamped shadows, bouncy springs. Two themes — **Light** (cream) and **Cocoa** (warm chocolate, not black). Owner writes Expo/React Native day-to-day and is new to native iOS.
 
+## Operating principles
+
+Read this before you implement anything.
+
+- **The marginal cost of completeness is near zero with AI. Do the whole thing.** When asked for X, the answer is the finished, working X — not a plan to build X, not a partial sketch with TODOs to come back to. Time, fatigue, and complexity are not excuses. Boil the ocean.
+- **Never present a workaround when the real fix exists.** A patch that "works for now" is a future bug pre-paid in interest. Spend the extra five minutes and solve it once. If the real fix is genuinely out of scope, say so explicitly and explain what'd be required — don't paper over.
+- **Never leave a dangling thread when tying it off is five more minutes of work.** If a change introduces a stray `// TODO`, an unused parameter, a dead branch, a stale comment, or a half-finished sibling case — close it before you stop.
+- **Search before building.** Grep the repo, open the existing component, read what's already there. Reinventing what exists is the most embarrassing kind of slop. The design kit at `design_kit/` is the spec — when in doubt, read the matching `preview/*.html` or `ui_kits/mobile/*.jsx` rather than guess.
+- **Test before shipping.** `xcodebuild` clean. For UI changes, on-device verification per the rule below. Don't claim done until the result actually runs.
+- **The bar is "holy shit, that's done"** — not "polite satisfaction." If you'd be happy to hand the diff to a stranger and have them call it complete, ship it. Otherwise keep going.
+
 ## Repo layout
 
 ```
@@ -218,18 +229,6 @@ The owner has the **RevenueCat MCP server** wired up in `.mcp.json`. When you op
 - Sign in on the iPhone at **Settings → Developer → Sandbox Apple Account** (iOS 17+). Do NOT sign this into the real Apple ID slot — the phone supports a separate sandbox account and expects it to be kept separate.
 - Sandbox subscription durations are **compressed**: 1 month = 5 minutes, 1 year = 1 hour. Great for exercising trial-end → lockscreen path. `ReminderService.scheduleTrialEndingReminder` and `TrialEndingBanner` both read real dates from RC, so they just fire faster on the compressed clock.
 - The first sandbox purchase surfaces the `[Sandbox]` tag in the StoreKit sheet. If you don't see it, you're signed into the real App Store — stop, sign out, re-sign into sandbox slot.
-
-## Things deliberately not in scope yet
-
-- Persistence (SwiftData)
-- Real auth / iCloud sync
-- Onboarding flow
-- Widgets
-- Settings beyond theme switcher + test-screen link
-- Reminders system integration
-- Push notifications
-
-Don't add scaffolding for these speculatively. Add them when the user asks.
 
 ## Git + commits
 
