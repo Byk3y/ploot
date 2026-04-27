@@ -40,6 +40,15 @@ struct OnboardingFlow: View {
                     )
             }
             .animation(Motion.spring, value: step)
+            .task {
+                // Cold-launch self-heal: if the Supabase session was
+                // restored from Keychain BEFORE this view mounted, the
+                // .loading → .signedIn transition already fired and the
+                // onChange below missed it. Re-run the returning-user
+                // check on mount so we don't trap an already-signed-in
+                // user on welcome/AuthView forever.
+                await checkReturningUser()
+            }
             .onChange(of: session.state) { old, new in
                 // Returning-user path: user tapped "Sign in" on welcome,
                 // SIWA succeeded. If the account has `onboarded_at` set,
@@ -53,14 +62,7 @@ struct OnboardingFlow: View {
                 // the new-user path's screen 22 SIWA (the quiz answers
                 // haven't been pushed yet there).
                 if new == .signedIn && old != .signedIn && step == .welcome {
-                    Task {
-                        if let snapshot = await SyncService.shared.fetchOnboardingProfile(),
-                           snapshot.isCompleted {
-                            UserPrefs.apply(from: snapshot)
-                            ReminderService.shared.scheduleDailyCheckin()
-                            onboardingCompleted = true
-                        }
-                    }
+                    Task { await checkReturningUser() }
                 }
             }
             .toolbar {
@@ -76,6 +78,27 @@ struct OnboardingFlow: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Returning-user self-heal
+
+    /// Pulls the remote profile for the current user. If `onboarded_at`
+    /// is set, hydrates UserPrefs and flips `onboardingCompleted` so
+    /// RootView swaps OnboardingFlow out for HomeView / lockscreen.
+    ///
+    /// Gated on signed-in + welcome step + not-already-completed so it's
+    /// safe to call from both `.task` (mount) and `.onChange` (sign-in
+    /// transition) without double-writing or misfiring mid-flow.
+    private func checkReturningUser() async {
+        guard session.state == .signedIn,
+              step == .welcome,
+              !onboardingCompleted else { return }
+        if let snapshot = await SyncService.shared.fetchOnboardingProfile(),
+           snapshot.isCompleted {
+            UserPrefs.apply(from: snapshot)
+            ReminderService.shared.scheduleDailyCheckin()
+            onboardingCompleted = true
         }
     }
 
