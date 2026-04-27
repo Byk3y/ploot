@@ -35,7 +35,7 @@ struct FAB: View {
     var body: some View {
         circle
             .contentShape(Circle())
-            .gesture(composedGesture)
+            .gesture(TapGesture().onEnded { action() }.exclusively(before: composedGesture))
             .onChange(of: dragPhase, handlePhaseChange)
             .animation(Motion.springFast, value: dragPhase)
             .sensoryFeedback(.impact(weight: .medium), trigger: dragPhase == .pressing) { old, new in
@@ -113,9 +113,10 @@ struct FAB: View {
                     onLongPressEnd?(false)
                     wasRecording = false
                 default:
-                    // Gesture ended before the long-press threshold: treat
-                    // as a regular tap and fire the primary action.
-                    action()
+                    // Tap path is handled by the exclusive TapGesture;
+                    // the sequenced gesture cancels (no .onEnded) on a
+                    // sub-threshold release.
+                    break
                 }
             }
     }
