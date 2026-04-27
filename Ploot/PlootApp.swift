@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 import RevenueCat
+import Lottie
 
 @main
 struct PlootApp: App {
@@ -10,6 +11,12 @@ struct PlootApp: App {
 
     init() {
         PlootFonts.register()
+
+        // Use the Core Animation renderer so the streak Lottie doesn't
+        // flash a blank frame when a tab containing it remounts. Core
+        // Animation also lifts animation playback off the main thread.
+        LottieConfiguration.shared.renderingEngine = .coreAnimation
+        FireLottieView.preload()
 
         // RevenueCat must be configured before any SubscriptionManager
         // work touches Purchases.shared. Log level is verbose only in
