@@ -209,6 +209,15 @@ struct QuickAddSheet: View {
             if existingTask == nil { titleFocused = true }
         }
         .onChange(of: title) { _, newVal in
+            // axis: .vertical TextFields insert "\n" on return instead of
+            // firing onSubmit. Treat return as "I'm done typing" — strip
+            // the newline and drop the keyboard so the meta pills + Save
+            // are reachable.
+            if newVal.contains("\n") {
+                title = newVal.replacingOccurrences(of: "\n", with: "")
+                titleFocused = false
+                return
+            }
             applyNLP(from: newVal)
         }
         .sheet(isPresented: $fullCalendarOpen) {
