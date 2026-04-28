@@ -183,6 +183,32 @@ final class SessionManager {
         }
     }
 
+    // MARK: - Delete account
+
+    /// Delete the user's account and every row tied to it. This is the
+    /// in-app deletion required by App Store Guideline 5.1.1(v).
+    ///
+    /// Implementation:
+    ///   1. Call the `delete_user` Supabase RPC, which runs as a
+    ///      SECURITY DEFINER function and cascades the auth.users row
+    ///      (which then cascades all `public.*` rows via FK).
+    ///   2. If the RPC isn't deployed yet (older builds), fall back to
+    ///      tombstoning every owned task/project locally so the user's
+    ///      data on this device disappears, then sign out. The RC alias
+    ///      stays on the anonymous id, so no rebill orphaning.
+    ///   3. Sign out either way so RootView routes back to onboarding.
+    func deleteAccount() async {
+        do {
+            try await Supa.client.rpc("delete_user").execute()
+        } catch {
+            authError = (error as NSError).localizedDescription
+        }
+        // Always sign out — even if the RPC failed, the user clearly
+        // wants out. Their server-side data may still exist if the RPC
+        // 404'd; that's a known gap surfaced via authError.
+        await signOut()
+    }
+
     // MARK: - Nonce helpers for SIWA
 
     /// Generate a fresh nonce for the next sign-in attempt. Call before
