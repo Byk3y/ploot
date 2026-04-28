@@ -65,6 +65,38 @@ enum TaskHelpers {
         tasks.filter { $0.isLive }
     }
 
+    // MARK: - Day filtering (for Calendar)
+
+    /// All live tasks scheduled on a given calendar day, sorted by time-
+    /// of-day. Includes done tasks so the calendar can show what was
+    /// completed; the row's strikethrough handles the visual.
+    static func tasks(
+        on day: Date,
+        from tasks: [PlootTask],
+        calendar: Calendar = .current
+    ) -> [PlootTask] {
+        tasks
+            .filter { task in
+                guard task.isLive, let due = task.dueDate else { return false }
+                return calendar.isDate(due, inSameDayAs: day)
+            }
+            .sorted { ($0.dueDate ?? .distantPast) < ($1.dueDate ?? .distantPast) }
+    }
+
+    /// Count of live, undone tasks on a given day. Drives the density
+    /// dots on the calendar grid — done tasks intentionally drop out so
+    /// "everything crushed" days look light, not crowded.
+    static func openTaskCount(
+        on day: Date,
+        from tasks: [PlootTask],
+        calendar: Calendar = .current
+    ) -> Int {
+        tasks.filter { task in
+            guard task.isLive, !task.done, let due = task.dueDate else { return false }
+            return calendar.isDate(due, inSameDayAs: day)
+        }.count
+    }
+
     // MARK: - Lateness
 
     /// Past its due date *right now* (regardless of whether it crossed a
@@ -160,6 +192,13 @@ enum TaskHelpers {
 
     /// Consecutive-day completion streak ending today. A day counts if at
     /// least one task has `completedAt` falling within it.
+    ///
+    /// The streak stays *alive* for the whole of "today" even before the
+    /// user completes anything — it only breaks once the calendar has
+    /// rolled past a day with zero completions. So if yesterday had
+    /// completions and today has none yet, we count starting from
+    /// yesterday and consider today "at risk" rather than broken.
+    /// Mirrors `StreakManager.isStreakLive`.
     static func streak(
         from tasks: [PlootTask],
         asOf now: Date = Date(),
@@ -171,8 +210,18 @@ enum TaskHelpers {
                 .compactMap { $0.completedAt }
                 .map { calendar.startOfDay(for: $0) }
         )
+        let today = calendar.startOfDay(for: now)
+        let anchor: Date
+        if completionDays.contains(today) {
+            anchor = today
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                  completionDays.contains(yesterday) {
+            anchor = yesterday
+        } else {
+            return 0
+        }
         var count = 0
-        var day = calendar.startOfDay(for: now)
+        var day = anchor
         while completionDays.contains(day) {
             count += 1
             guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
