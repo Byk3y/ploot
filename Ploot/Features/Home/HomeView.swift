@@ -19,6 +19,10 @@ struct HomeView: View {
     @State var openTask: PlootTask? = nil
     @State var openProject: PlootProject? = nil
     @State var theme: PlootTheme = .light
+    /// CalendarScreen mirrors its selected day here so the FAB can
+    /// pre-fill new tasks with the right date when the user is browsing
+    /// the calendar.
+    @State var calendarSelected: Date = Date()
 
     // Voice capture
     @State var speech = SpeechService()
@@ -86,8 +90,11 @@ struct HomeView: View {
         }
         .plootTheme(theme)
         .sheet(isPresented: $quickAddOpen) {
-            QuickAddSheet(onClose: { quickAddOpen = false })
-                .plootTheme(theme)
+            QuickAddSheet(
+                initialDueDate: tab == .calendar ? calendarSelected : nil,
+                onClose: { quickAddOpen = false }
+            )
+            .plootTheme(theme)
         }
         .sheet(item: $editingTask) { task in
             QuickAddSheet(existingTask: task, onClose: { editingTask = nil })
@@ -131,7 +138,7 @@ struct HomeView: View {
         case .projects:
             ProjectsScreen(onOpenProject: { openProject = $0 })
         case .calendar:
-            CalendarScreen()
+            CalendarScreen(selected: $calendarSelected)
         case .done:
             DoneScreen(onOpen: { openTask = $0 })
         }

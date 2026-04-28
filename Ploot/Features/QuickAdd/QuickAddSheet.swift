@@ -24,6 +24,10 @@ import SwiftData
 struct QuickAddSheet: View {
     let existingTask: PlootTask?
     let initialProjectId: String?
+    /// Pre-fill the date pill when creating a new task (e.g. from
+    /// Calendar with a specific day selected). Ignored when
+    /// `existingTask` is set.
+    let initialDueDate: Date?
     var onClose: () -> Void
 
     @Environment(\.plootPalette) var palette
@@ -80,19 +84,25 @@ struct QuickAddSheet: View {
     init(
         existingTask: PlootTask? = nil,
         initialProjectId: String? = nil,
+        initialDueDate: Date? = nil,
         onClose: @escaping () -> Void
     ) {
         self.existingTask = existingTask
         self.initialProjectId = initialProjectId
+        self.initialDueDate = initialDueDate
         self.onClose = onClose
 
         let isEditing = existingTask != nil
-        let parsedDue = DueOption.fromDate(existingTask?.dueDate)
-        // If the existing date didn't fit any bucket, fromDate returned
-        // .someday. Stash the real date in customDate so it survives.
+        // Editing wins; otherwise honor the caller's initialDueDate hint
+        // (e.g. Calendar passed in the selected day). Otherwise default
+        // to today's bucket.
+        let seedDate: Date? = existingTask?.dueDate ?? initialDueDate
+        let parsedDue = DueOption.fromDate(seedDate)
+        // If the seed didn't fit a bucket, stash the real date in
+        // customDate so it survives.
         let initialCustom: Date?
-        if let existing = existingTask?.dueDate, parsedDue == .someday {
-            initialCustom = existing
+        if let seed = seedDate, parsedDue == .someday {
+            initialCustom = seed
         } else {
             initialCustom = nil
         }
@@ -103,7 +113,7 @@ struct QuickAddSheet: View {
         _priority = State(initialValue: existingTask?.priority ?? .normal)
         _due = State(initialValue: parsedDue)
         _customDate = State(initialValue: initialCustom)
-        _time = State(initialValue: Self.extractTimeSlot(from: existingTask?.dueDate))
+        _time = State(initialValue: Self.extractTimeSlot(from: seedDate))
         _remindMe = State(initialValue: existingTask?.remindMe ?? false)
         _repeats = State(initialValue: RepeatOption.fromStored(existingTask?.repeats))
         let initialSubs = existingTask?.subtasks
@@ -114,9 +124,13 @@ struct QuickAddSheet: View {
         _showNote = State(initialValue: !(existingTask?.note?.isEmpty ?? true))
         _showSubtasks = State(initialValue: !initialSubs.isEmpty)
 
-        // Treat every populated field on edit as user-set so NLP doesn't
-        // overwrite it when the user touches the title.
-        _dateUserSet = State(initialValue: isEditing && existingTask?.dueDate != nil)
+        // Mark fields user-set so NLP doesn't overwrite them on title
+        // edits. Editing → all populated fields are sticky. New task
+        // with an initialDueDate hint → date is sticky too (the user
+        // already committed to "this day" by tapping the cell).
+        _dateUserSet = State(initialValue: isEditing
+                              ? existingTask?.dueDate != nil
+                              : initialDueDate != nil)
         _priorityUserSet = State(initialValue: isEditing && (existingTask?.priority ?? .normal) != .normal)
         _projectUserSet = State(initialValue: isEditing && existingTask?.projectId != nil)
     }
