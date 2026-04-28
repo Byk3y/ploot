@@ -111,7 +111,12 @@ struct TaskDetailScreen: View {
     private var chipRow: some View {
         FlowLayout(spacing: 8) {
             if let dueLabel = TaskHelpers.displayLabel(for: task) {
-                Chip(text: dueLabel, color: .clay, icon: "calendar")
+                let isLate = TaskHelpers.isLate(task)
+                Chip(
+                    text: dueLabel,
+                    color: .clay,
+                    icon: isLate ? "clock.badge.exclamationmark" : "calendar"
+                )
             }
             if let project = TaskHelpers.project(id: task.projectId, from: projects) {
                 Chip(text: project.name, color: .sky, icon: "folder")
@@ -172,9 +177,8 @@ struct TaskDetailScreen: View {
 
     private var metaFooter: some View {
         VStack(spacing: 10) {
-            DetailRow(icon: "bell", label: "Remind me", value: "9:00 AM")
-            DetailRow(icon: "repeat", label: "Repeats", value: task.repeats ?? "Never")
-            DetailRow(icon: "paperclip", label: "Attachments", value: "None")
+            DetailRow(icon: "bell", label: "Remind me", value: reminderValue)
+            DetailRow(icon: "repeat", label: "Repeats", value: repeatsValue)
         }
         .padding(14)
         .background(
@@ -182,6 +186,26 @@ struct TaskDetailScreen: View {
                 .fill(palette.bgSunken)
         )
         .padding(.top, Spacing.s8)
+    }
+
+    private var reminderValue: String {
+        guard task.remindMe == true, let due = task.dueDate else { return "Off" }
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: due)
+        let m = cal.component(.minute, from: due)
+        // Lead with "On · " so the row reads as a state ("On at 9:00 AM"),
+        // not as a coincidence with the due time. Without this, users see
+        // a bare time and aren't sure whether reminders are actually set.
+        if h == 0 && m == 0 { return "On · day-of" }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US")
+        fmt.dateFormat = "h:mm a"
+        return "On · \(fmt.string(from: due))"
+    }
+
+    private var repeatsValue: String {
+        guard let raw = task.repeats, !raw.isEmpty else { return "Never" }
+        return raw.capitalized
     }
 }
 
