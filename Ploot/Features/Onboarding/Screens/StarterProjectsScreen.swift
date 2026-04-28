@@ -125,7 +125,7 @@ struct StarterProjectsScreen: View {
                 .stampedShadow(radius: Radius.md, offset: 2)
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: selected)
+            .plootHaptic(.selection, trigger: selected)
             .animation(Motion.springFast, value: selected)
         }
     }

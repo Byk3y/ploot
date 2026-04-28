@@ -40,7 +40,7 @@ struct Chip: View {
         }
         .buttonStyle(.plain)
         .disabled(onTap == nil)
-        .sensoryFeedback(.selection, trigger: selected)
+        .plootHaptic(.selection, trigger: selected)
     }
 
     private func resolvedPalette() -> (Color, Color) {

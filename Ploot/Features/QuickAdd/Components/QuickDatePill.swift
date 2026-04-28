@@ -35,6 +35,6 @@ struct QuickDatePill: View {
             )
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: active)
+        .plootHaptic(.selection, trigger: active)
     }
 }

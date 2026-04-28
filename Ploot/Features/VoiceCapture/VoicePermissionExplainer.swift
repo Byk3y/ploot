@@ -86,7 +86,7 @@ struct VoicePermissionExplainer: View {
             .padding(.bottom, Spacing.s4)
         }
         .background(palette.bg.ignoresSafeArea())
-        .sensoryFeedback(.selection, trigger: false)
+        .plootHaptic(.selection, trigger: false)
     }
 
     private func bullet(icon: String, title: String, body: String) -> some View {

@@ -45,7 +45,7 @@ struct MetaPill: View {
             .scaleEffect(pulse ? 1.08 : 1.0)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: pulseTrigger)
+        .plootHaptic(.selection, trigger: pulseTrigger)
         .onChange(of: pulseTrigger) { _, _ in
             withAnimation(Motion.springFast) { pulse = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {

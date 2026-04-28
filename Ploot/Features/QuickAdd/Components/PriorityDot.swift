@@ -32,7 +32,7 @@ struct PriorityDot: View {
         }
         .buttonStyle(.plain)
         .animation(Motion.springFast, value: active)
-        .sensoryFeedback(.selection, trigger: active)
+        .plootHaptic(.selection, trigger: active)
     }
 
     private var activeFill: Color {

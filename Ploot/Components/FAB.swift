@@ -38,10 +38,10 @@ struct FAB: View {
             .gesture(TapGesture().onEnded { action() }.exclusively(before: composedGesture))
             .onChange(of: dragPhase, handlePhaseChange)
             .animation(Motion.springFast, value: dragPhase)
-            .sensoryFeedback(.impact(weight: .medium), trigger: dragPhase == .pressing) { old, new in
+            .plootHaptic(.impact(weight: .medium), trigger: dragPhase == .pressing) { old, new in
                 !old && new
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: dragPhase == .recording) { old, new in
+            .plootHaptic(.impact(weight: .light), trigger: dragPhase == .recording) { old, new in
                 !old && new
             }
             .accessibilityAddTraits(.isButton)

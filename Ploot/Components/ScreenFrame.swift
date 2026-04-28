@@ -139,6 +139,6 @@ struct HeaderButton: View {
                 .overlay(Circle().strokeBorder(palette.borderInk, lineWidth: 2))
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: false)
+        .plootHaptic(.selection, trigger: false)
     }
 }

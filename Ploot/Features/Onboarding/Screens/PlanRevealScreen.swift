@@ -47,7 +47,7 @@ struct PlanRevealScreen: View {
                 entered = true
             }
         }
-        .sensoryFeedback(.success, trigger: entered)
+        .plootHaptic(.success, trigger: entered)
     }
 
     private var headline: String {

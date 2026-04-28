@@ -94,7 +94,7 @@ struct BreakdownQuestionCard: View {
         .buttonStyle(.plain)
         .disabled(picked != nil)
         .opacity(picked == nil || isPicked ? 1 : 0.35)
-        .sensoryFeedback(.selection, trigger: isPicked)
+        .plootHaptic(.selection, trigger: isPicked)
     }
 
     private var customChip: some View {

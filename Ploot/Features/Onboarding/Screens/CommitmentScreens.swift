@@ -93,7 +93,7 @@ struct DailyGoalScreen: View {
                 .stampedShadow(radius: Radius.md, offset: 2)
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: selected)
+            .plootHaptic(.selection, trigger: selected)
             .animation(Motion.springFast, value: selected)
         }
     }
@@ -202,7 +202,7 @@ struct StreakScreen: View {
                     .stampedShadow(radius: Radius.lg, offset: 2)
                 }
                 .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: answers.trackStreak)
+                .plootHaptic(.selection, trigger: answers.trackStreak)
                 .animation(Motion.springFast, value: answers.trackStreak)
 
                 Spacer(minLength: 0)

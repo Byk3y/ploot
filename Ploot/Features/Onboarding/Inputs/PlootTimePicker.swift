@@ -127,7 +127,7 @@ struct PlootTimePicker: View {
                 )
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: active)
+        .plootHaptic(.selection, trigger: active)
         .animation(Motion.springFast, value: active)
     }
 
@@ -169,7 +169,7 @@ struct PlootTimePicker: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: selection)
             .safeAreaPadding(.horizontal, sidePad)
-            .sensoryFeedback(.selection, trigger: selection.wrappedValue)
+            .plootHaptic(.selection, trigger: selection.wrappedValue)
             .overlay(centerIndicator, alignment: .center)
             .overlay(edgeFade)
         }

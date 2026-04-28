@@ -83,7 +83,7 @@ struct PlootButtonStyle: ButtonStyle {
             )
             .offset(y: pressed ? stampOffset : 0)
             .animation(Motion.springFast, value: pressed)
-            .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: pressed)
+            .plootHaptic(.impact(weight: .light, intensity: 0.6), trigger: pressed)
     }
 
     private var stampOffset: CGFloat {

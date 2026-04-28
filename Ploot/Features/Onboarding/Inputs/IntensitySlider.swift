@@ -31,7 +31,7 @@ struct IntensitySlider: View {
                 step: 1
             )
             .tint(palette.primary)
-            .sensoryFeedback(.selection, trigger: value)
+            .plootHaptic(.selection, trigger: value)
         }
     }
 }

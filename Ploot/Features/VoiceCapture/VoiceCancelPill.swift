@@ -45,7 +45,7 @@ struct VoiceCancelPill: View {
         .scaleEffect(cancelPreview ? 1.06 : 1)
         .animation(Motion.spring, value: cancelPreview)
         .allowsHitTesting(false)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: cancelPreview) { old, new in !old && new }
+        .plootHaptic(.impact(weight: .heavy), trigger: cancelPreview) { old, new in !old && new }
     }
 }
 

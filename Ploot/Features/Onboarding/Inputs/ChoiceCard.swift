@@ -53,7 +53,7 @@ struct ChoiceCard: View {
             .stampedShadow(radius: Radius.md, offset: 2)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: selected)
+        .plootHaptic(.selection, trigger: selected)
         .animation(Motion.springFast, value: selected)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityLabel))

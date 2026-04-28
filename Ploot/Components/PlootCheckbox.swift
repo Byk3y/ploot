@@ -57,7 +57,7 @@ struct PlootCheckbox: View {
             .contentShape(Circle())
         }
         .frame(width: size + 12, height: size + 12)
-        .sensoryFeedback(.success, trigger: checked) { old, new in !old && new }
+        .plootHaptic(.success, trigger: checked) { old, new in !old && new }
         .onChange(of: checked) { _, new in
             if new {
                 animateDraw()

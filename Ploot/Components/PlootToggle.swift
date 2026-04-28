@@ -30,6 +30,6 @@ struct PlootToggle: View {
             }
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.impact(weight: .light), trigger: isOn)
+        .plootHaptic(.impact(weight: .light), trigger: isOn)
     }
 }

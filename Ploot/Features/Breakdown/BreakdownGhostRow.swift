@@ -64,7 +64,7 @@ struct BreakdownGhostRow: View {
                     withAnimation(Motion.springFast) { pressed = false }
                 }
         )
-        .sensoryFeedback(.impact(weight: .light), trigger: sparkle)
+        .plootHaptic(.impact(weight: .light), trigger: sparkle)
     }
 }
 

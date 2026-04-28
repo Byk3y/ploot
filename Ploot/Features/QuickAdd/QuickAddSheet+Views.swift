@@ -47,7 +47,7 @@ extension QuickAddSheet {
                     .foregroundStyle(palette.fg3)
                 }
                 .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: showNote)
+                .plootHaptic(.selection, trigger: showNote)
             }
         }
         .padding(.top, Spacing.s2)
@@ -177,7 +177,7 @@ extension QuickAddSheet {
                     )
                 }
                 .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: customDate)
+                .plootHaptic(.selection, trigger: customDate)
             }
 
             if customDate != nil || due != .someday {
@@ -261,7 +261,7 @@ extension QuickAddSheet {
                 )
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: showSubtasks)
+            .plootHaptic(.selection, trigger: showSubtasks)
         }
     }
 
@@ -419,7 +419,7 @@ extension QuickAddSheet {
                     .background(Capsule().fill(palette.bgSunken))
                     .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1.5))
                 }
-                .sensoryFeedback(.selection, trigger: repeats)
+                .plootHaptic(.selection, trigger: repeats)
             }
             .padding(.vertical, Spacing.s3)
 

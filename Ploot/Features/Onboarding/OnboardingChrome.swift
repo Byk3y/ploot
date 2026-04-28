@@ -60,7 +60,7 @@ struct OnboardingTopBar: View {
                         .stampedShadow(radius: 18, offset: 2)
                 }
                 .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: step)
+                .plootHaptic(.selection, trigger: step)
             } else {
                 Spacer().frame(width: 36, height: 36)
             }
@@ -109,7 +109,7 @@ struct PrimaryCTA: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .sensoryFeedback(.impact(weight: .medium), trigger: pressed)
+        .plootHaptic(.impact(weight: .medium), trigger: pressed)
         .animation(Motion.springFast, value: pressed)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

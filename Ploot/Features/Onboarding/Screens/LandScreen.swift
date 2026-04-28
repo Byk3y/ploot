@@ -53,7 +53,7 @@ struct LandScreen: View {
             // Auto-advance if the user's still watching.
             complete()
         }
-        .sensoryFeedback(.success, trigger: entered)
+        .plootHaptic(.success, trigger: entered)
     }
 
     private func complete() {

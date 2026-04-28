@@ -114,7 +114,7 @@ extension NewProjectSheet {
             .allowsHitTesting(false)
         }
         .frame(maxWidth: .infinity, minHeight: 48)
-        .sensoryFeedback(.selection, trigger: emoji)
+        .plootHaptic(.selection, trigger: emoji)
     }
 
     func emojiTile(_ candidate: String) -> some View {
@@ -135,7 +135,7 @@ extension NewProjectSheet {
                 )
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: selected)
+        .plootHaptic(.selection, trigger: selected)
     }
 
     // MARK: - Color
@@ -181,6 +181,6 @@ extension NewProjectSheet {
                 }
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: selected)
+        .plootHaptic(.selection, trigger: selected)
     }
 }

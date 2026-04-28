@@ -61,7 +61,7 @@ struct SwipeToReveal<Content: View>: View {
                 .stampedShadow(radius: Radius.md, offset: 2)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.impact(weight: .medium), trigger: revealed) { _, isRevealed in
+        .plootHaptic(.impact(weight: .medium), trigger: revealed) { _, isRevealed in
             isRevealed
         }
     }

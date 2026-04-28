@@ -107,7 +107,7 @@ struct CalendarScreen: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: monthExpanded)
+            .plootHaptic(.selection, trigger: monthExpanded)
 
             if !isCurrentRange {
                 Button(action: jumpToToday) {
@@ -139,7 +139,7 @@ struct CalendarScreen: View {
                 .overlay(Circle().strokeBorder(palette.border, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: monthAnchor)
+        .plootHaptic(.selection, trigger: monthAnchor)
     }
 
     // MARK: - Weekday header
@@ -418,7 +418,7 @@ private struct DayCell: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: isSelected)
+        .plootHaptic(.selection, trigger: isSelected)
         .animation(Motion.springFast, value: isSelected)
     }
 
