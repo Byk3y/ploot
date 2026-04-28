@@ -36,11 +36,57 @@ enum TaskHelpers {
         from tasks: [PlootTask],
         asOf now: Date = Date()
     ) -> [PlootTask] {
-        tasks.filter { $0.isLive && derivedSection(for: $0, asOf: now) == section }
+        let filtered = tasks.filter { $0.isLive && derivedSection(for: $0, asOf: now) == section }
+        return sorted(filtered)
     }
 
-    static func doneTasks(from tasks: [PlootTask]) -> [PlootTask] {
-        tasks.filter { $0.isLive && $0.done }
+    /// Apply the user's `Settings → Today → Sort by` preference. Used
+    /// for both the bucketed Today list and any other "list of tasks"
+    /// surface.
+    /// - Due time: ascending dueDate, dateless rows fall to the end.
+    /// - Created: newest first (matches the natural inbox flow).
+    /// - Priority: high → normal → low; ties resolve by createdAt desc.
+    static func sorted(_ tasks: [PlootTask]) -> [PlootTask] {
+        switch UserPrefs.sortOrder {
+        case .dueTime:
+            return tasks.sorted { lhs, rhs in
+                let l = lhs.dueDate ?? .distantFuture
+                let r = rhs.dueDate ?? .distantFuture
+                if l != r { return l < r }
+                return lhs.createdAt > rhs.createdAt
+            }
+        case .created:
+            return tasks.sorted { $0.createdAt > $1.createdAt }
+        case .priority:
+            return tasks.sorted { lhs, rhs in
+                if lhs.priority != rhs.priority {
+                    return lhs.priority.sortRank < rhs.priority.sortRank
+                }
+                return lhs.createdAt > rhs.createdAt
+            }
+        }
+    }
+
+    /// Live, done tasks. Honors `Settings → Cleanup → Auto-archive done`
+    /// by hiding (not deleting) rows whose `completedAt` is older than
+    /// the configured cutoff. `autoArchiveDays == 0` means "never
+    /// archive" — every done row stays visible.
+    static func doneTasks(
+        from tasks: [PlootTask],
+        asOf now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [PlootTask] {
+        let archiveDays = UserPrefs.autoArchiveDays
+        let cutoff: Date? = archiveDays > 0
+            ? calendar.date(byAdding: .day, value: -archiveDays, to: now)
+            : nil
+        return tasks.filter { task in
+            guard task.isLive, task.done else { return false }
+            if let cutoff, let completedAt = task.completedAt, completedAt < cutoff {
+                return false
+            }
+            return true
+        }
     }
 
     /// Count of tasks the user has completed today — measured by
@@ -190,39 +236,38 @@ enum TaskHelpers {
 
     // MARK: - Streak
 
-    /// Consecutive-day completion streak ending today. A day counts if at
-    /// least one task has `completedAt` falling within it.
+    /// Consecutive-day completion streak ending today. A day "counts" once
+    /// it accumulates at least `threshold(rule, dailyGoal)` completions:
+    ///   - `.anyTask`: any one completion is enough.
+    ///   - `.goalHit`: needs `dailyGoal` completions to secure the day.
     ///
-    /// The streak stays *alive* for the whole of "today" even before the
-    /// user completes anything — it only breaks once the calendar has
-    /// rolled past a day with zero completions. So if yesterday had
-    /// completions and today has none yet, we count starting from
-    /// yesterday and consider today "at risk" rather than broken.
-    /// Mirrors `StreakManager.isStreakLive`.
+    /// Today stays alive even before the user secures it — if yesterday
+    /// counted and today hasn't yet, we anchor on yesterday and treat
+    /// today as "at risk" rather than broken.
+    ///
+    /// This is the *single source of truth* for streak math. TodayScreen
+    /// and DoneScreen both compute through here so they can never drift.
     static func streak(
         from tasks: [PlootTask],
+        rule: UserPrefs.StreakRule = .anyTask,
+        dailyGoal: Int = 1,
         asOf now: Date = Date(),
         calendar: Calendar = .current
     ) -> Int {
-        let completionDays = Set(
-            tasks
-                .filter { $0.isLive }
-                .compactMap { $0.completedAt }
-                .map { calendar.startOfDay(for: $0) }
-        )
+        let securedDays = securedDays(from: tasks, rule: rule, dailyGoal: dailyGoal, calendar: calendar)
         let today = calendar.startOfDay(for: now)
         let anchor: Date
-        if completionDays.contains(today) {
+        if securedDays.contains(today) {
             anchor = today
         } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
-                  completionDays.contains(yesterday) {
+                  securedDays.contains(yesterday) {
             anchor = yesterday
         } else {
             return 0
         }
         var count = 0
         var day = anchor
-        while completionDays.contains(day) {
+        while securedDays.contains(day) {
             count += 1
             guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
             day = prev
@@ -233,14 +278,11 @@ enum TaskHelpers {
     /// Longest historical consecutive-day completion run.
     static func bestStreak(
         from tasks: [PlootTask],
+        rule: UserPrefs.StreakRule = .anyTask,
+        dailyGoal: Int = 1,
         calendar: Calendar = .current
     ) -> Int {
-        let days = Set(
-            tasks
-                .filter { $0.isLive }
-                .compactMap { $0.completedAt }
-                .map { calendar.startOfDay(for: $0) }
-        ).sorted()
+        let days = securedDays(from: tasks, rule: rule, dailyGoal: dailyGoal, calendar: calendar).sorted()
         guard !days.isEmpty else { return 0 }
 
         var best = 1
@@ -258,24 +300,48 @@ enum TaskHelpers {
         return best
     }
 
+    /// Set of local-day starts that satisfy the streak rule. For `.anyTask`,
+    /// any day with at least one completion. For `.goalHit`, only days
+    /// where completion count met `dailyGoal`.
+    private static func securedDays(
+        from tasks: [PlootTask],
+        rule: UserPrefs.StreakRule,
+        dailyGoal: Int,
+        calendar: Calendar
+    ) -> Set<Date> {
+        let dayCounts = tasks
+            .filter { $0.isLive }
+            .compactMap { $0.completedAt }
+            .map { calendar.startOfDay(for: $0) }
+            .reduce(into: [Date: Int]()) { acc, day in acc[day, default: 0] += 1 }
+
+        let threshold: Int = {
+            switch rule {
+            case .anyTask: return 1
+            case .goalHit: return max(1, dailyGoal)
+            }
+        }()
+        return Set(dayCounts.filter { $0.value >= threshold }.keys)
+    }
+
     enum StreakState { case onFire, atRisk, cold }
 
-    /// Folds the brigo-style streak status:
+    /// Folds the streak status:
     /// - `.cold` when the user has no active streak.
-    /// - `.atRisk` when there is a streak but today hasn't been secured yet.
-    /// - `.onFire` when there is a streak and today already has a completion.
+    /// - `.atRisk` when there is a streak but today isn't secured yet.
+    /// - `.onFire` when there is a streak and today is already secured.
     static func streakState(
         from tasks: [PlootTask],
+        rule: UserPrefs.StreakRule = .anyTask,
+        dailyGoal: Int = 1,
         asOf now: Date = Date(),
         calendar: Calendar = .current
     ) -> StreakState {
-        let current = streak(from: tasks, asOf: now, calendar: calendar)
+        let current = streak(from: tasks, rule: rule, dailyGoal: dailyGoal, asOf: now, calendar: calendar)
         guard current > 0 else { return .cold }
         let today = calendar.startOfDay(for: now)
-        let securedToday = tasks.contains { task in
-            guard task.isLive, let completedAt = task.completedAt else { return false }
-            return calendar.isDate(completedAt, inSameDayAs: today)
-        }
+        let securedToday = securedDays(from: tasks, rule: rule, dailyGoal: dailyGoal, calendar: calendar)
+            .contains(today)
         return securedToday ? .onFire : .atRisk
     }
 
@@ -329,31 +395,31 @@ enum TaskHelpers {
             .reduce(0, +)
     }
 
-    /// Mon → Sun bars for the *current calendar week* (not trailing 7 days).
-    /// Forces Monday as the first weekday so the row reads M T W T F S S
-    /// regardless of locale.
+    /// Seven-day bar row for the *current calendar week* (not the
+    /// trailing 7 days). Honors `Settings → Appearance → Week starts on`
+    /// via `Calendar.ploot.firstWeekday`, so the row reads M…S for
+    /// Monday-start users and S…S for Sunday-start users.
     static func currentWeekCounts(
         from tasks: [PlootTask],
         asOf now: Date = Date(),
-        calendar baseCalendar: Calendar = .current
+        calendar baseCalendar: Calendar = .ploot
     ) -> [DayBucket] {
-        var calendar = baseCalendar
-        calendar.firstWeekday = 2 // Monday
+        let calendar = baseCalendar
 
         let labelFmt = DateFormatter()
         labelFmt.locale = Locale(identifier: "en_US")
         labelFmt.dateFormat = "EEEEE"
 
-        // Walk back from `now` until we hit the configured firstWeekday (Mon).
-        var monday = calendar.startOfDay(for: now)
-        while calendar.component(.weekday, from: monday) != calendar.firstWeekday {
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: monday) else { break }
-            monday = prev
+        // Walk back from `now` until we hit the configured firstWeekday.
+        var weekStart = calendar.startOfDay(for: now)
+        while calendar.component(.weekday, from: weekStart) != calendar.firstWeekday {
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: weekStart) else { break }
+            weekStart = prev
         }
 
         let today = calendar.startOfDay(for: now)
         return (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: monday) else { return nil }
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart) else { return nil }
             let count = tasks.filter { task in
                 guard task.isLive, let completedAt = task.completedAt else { return false }
                 return calendar.isDate(completedAt, inSameDayAs: day)

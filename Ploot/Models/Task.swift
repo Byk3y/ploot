@@ -25,6 +25,17 @@ enum Priority: String, CaseIterable, Codable, Identifiable {
         case .urgent: return "🔥"
         }
     }
+
+    /// Lower rank → higher visual priority. Used when sorting a list by
+    /// priority (urgent > high > medium > normal).
+    var sortRank: Int {
+        switch self {
+        case .urgent: return 0
+        case .high:   return 1
+        case .medium: return 2
+        case .normal: return 3
+        }
+    }
 }
 
 enum TaskSection: String, Codable, CaseIterable {
@@ -205,10 +216,10 @@ final class PlootTask {
         ReminderService.shared.schedule(for: self)
         SyncService.shared.push(task: self)
         if value, let ctx = self.modelContext {
-            StreakManager.bumpIfGoalHit(context: ctx)
             // If this task belonged to a breakdown project, surface the
             // next queued task so the project always has exactly one
-            // active step in Today.
+            // active step in Today. Streak is derived from completedAt
+            // by TaskHelpers — no imperative bookkeeping needed.
             ProjectTaskPromoter.promoteNextIfNeeded(afterCompleting: self, context: ctx)
         }
     }
