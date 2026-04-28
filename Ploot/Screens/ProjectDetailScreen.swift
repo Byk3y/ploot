@@ -167,12 +167,17 @@ struct ProjectDetailScreen: View {
     private func taskList(tasks: [PlootTask]) -> some View {
         if tasks.isEmpty {
             VStack(spacing: Spacing.s4) {
-                BreakdownGhostRow(onTap: { breakingDown = true })
-                    .padding(.horizontal, Spacing.s4)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
+                // Hide the AI sparkle CTA entirely when the user has
+                // disabled AI breakdown in Settings — the entry point
+                // shouldn't be reachable if they've opted out.
+                if UserPrefs.useAIBreakdown {
+                    BreakdownGhostRow(onTap: { breakingDown = true })
+                        .padding(.horizontal, Spacing.s4)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
                 EmptyState(
                     systemImage: "tray",
                     title: "Nothing here yet.",
@@ -190,7 +195,7 @@ struct ProjectDetailScreen: View {
                             onToggle: { task.setDone($0) },
                             onOpen: { editingTask = task },
                             onEdit: { editingTask = task },
-                            onDelete: { deletingTask = task }
+                            onDelete: { requestDelete(task) }
                         )
                         .transition(.asymmetric(
                             insertion: .move(edge: .leading).combined(with: .opacity),
@@ -224,6 +229,22 @@ struct ProjectDetailScreen: View {
         case (.none, .some): return false
         case (.none, .none):
             return a.createdAt > b.createdAt
+        }
+    }
+
+    /// Route a task delete through the user's "Confirm before delete"
+    /// preference. Mirror of TodayScreen + DoneScreen so the toggle
+    /// behaves the same everywhere a task can be deleted via the row
+    /// menu.
+    private func requestDelete(_ task: PlootTask) {
+        if UserPrefs.confirmBeforeDelete {
+            deletingTask = task
+        } else {
+            ReminderService.shared.cancel(for: task)
+            withAnimation(Motion.spring) {
+                task.softDelete()
+                try? modelContext.save()
+            }
         }
     }
 

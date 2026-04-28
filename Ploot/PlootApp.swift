@@ -144,6 +144,11 @@ private struct RootView: View {
                     await SyncService.shared.pullAll(context: modelContext)
                     await SyncService.shared.startRealtime(context: modelContext)
                 }
+                // Daily auto-roll sweep — moves yesterday's incomplete
+                // dated tasks to today when the user has opted in. Runs
+                // at most once per local day; the service's own
+                // bookkeeping handles the dedupe.
+                AutoRollService.sweepIfEnabled(context: modelContext)
             }
         }
     }

@@ -100,6 +100,32 @@ enum TimelineMode: Equatable, Hashable {
         }
     }
 
+    /// Map a `UserPrefs.defaultTimelineMode` raw string back to the enum.
+    /// Falls back to `.drip` for unknown values (e.g. `.picked`, which
+    /// can't round-trip through a string preference cleanly).
+    static func fromPref(_ raw: String) -> TimelineMode {
+        switch raw {
+        case "drip":         return .drip
+        case "thisWeekend":  return .thisWeekend
+        case "thisWeek":     return .thisWeek
+        case "nextTwoWeeks": return .nextTwoWeeks
+        default:             return .drip
+        }
+    }
+
+    /// Stable string key for round-tripping through `UserPrefs`. Mirrors
+    /// `fromPref(...)`. `.picked` collapses to `drip` because we can't
+    /// store an arbitrary date in a single string pref.
+    var prefKey: String {
+        switch self {
+        case .drip:         return "drip"
+        case .thisWeekend:  return "thisWeekend"
+        case .thisWeek:     return "thisWeek"
+        case .nextTwoWeeks: return "nextTwoWeeks"
+        case .picked:       return "drip"
+        }
+    }
+
     /// Inclusive list of days between `start` (rounded down to startOfDay)
     /// and `end` (rounded down). Returns at least one day even if the
     /// caller picked today — so a same-day deadline still gets all tasks

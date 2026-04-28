@@ -108,7 +108,7 @@ Before generating tasks, decide whether you need ONE clarifying question.
 Ask ONLY if the answer would change the task list significantly (>30%).
 Skip if you are 70%+ confident you can generate a good list from the title alone plus any prior answers and the user context below.
 
-Maximum 3 questions total across the conversation (count the prior answers). After 3 prior answers, you MUST generate tasks.
+(The question budget appears in a separate "Question budget" section below — count the prior answers against the cap stated there.)
 
 Question categories — pick at most ONE per turn:
 - Approach (DIY vs pro, scratch vs template, manual vs automated)
@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "unauthorized", reason: "invalid_jwt" }, 401)
   }
 
-  let body: { title?: unknown; answers?: unknown; locale?: unknown }
+  let body: { title?: unknown; answers?: unknown; locale?: unknown; max_questions?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -229,8 +229,15 @@ Deno.serve(async (req) => {
   const title = typeof body.title === "string" ? body.title.trim() : ""
   if (!title || title.length > 500) return jsonResponse({ error: "invalid_title" }, 400)
 
+  // Caps the conversation length. Driven by the iOS client's
+  // Settings → AI breakdown → Clarifying questions pref. 0 means "skip
+  // questions entirely, jump straight to tasks". Defaults to 3 if the
+  // client doesn't pass it, matching the previous hardcoded cap.
+  const maxQuestionsRaw = typeof body.max_questions === "number" ? body.max_questions : 3
+  const maxQuestions = Math.max(0, Math.min(5, Math.floor(maxQuestionsRaw)))
+
   const answersRaw = Array.isArray(body.answers) ? body.answers : []
-  if (answersRaw.length > 3) return jsonResponse({ error: "too_many_answers" }, 400)
+  if (answersRaw.length > 5) return jsonResponse({ error: "too_many_answers" }, 400)
   const answers: Answer[] = []
   for (const a of answersRaw) {
     if (!a || typeof a !== "object") continue
@@ -283,7 +290,13 @@ Deno.serve(async (req) => {
 
   const profile = (profileResult.data as Profile | null) ?? null
   const preamble = buildPreamble(profile)
-  const systemPrompt = SYSTEM_PROMPT_STATIC + "\n" + preamble
+  // The user-pref question cap rewrites the question budget in the
+  // system prompt. `maxQuestions === 0` flips the prompt to "never
+  // ask, always emit tasks" so the prefill is unambiguous.
+  const questionRule = maxQuestions === 0
+    ? `\n\n## Question budget\nThe user has disabled clarifying questions. NEVER ask a question — emit tasks (or hint/split/refused) on the first turn.`
+    : `\n\n## Question budget\nMaximum ${maxQuestions} question${maxQuestions === 1 ? "" : "s"} total across the conversation (count the prior answers). After ${maxQuestions} prior answer${maxQuestions === 1 ? "" : "s"}, you MUST generate tasks.`
+  const systemPrompt = SYSTEM_PROMPT_STATIC + questionRule + "\n" + preamble
   const userMessage = buildUserMessage(title, answers)
 
   const stream = new ReadableStream<Uint8Array>({

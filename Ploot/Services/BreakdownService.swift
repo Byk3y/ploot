@@ -59,8 +59,17 @@ enum BreakdownService {
         struct Body: Encodable {
             let title: String
             let answers: [BreakdownAnswer]
+            // Caps the number of clarifying questions the edge function
+            // is allowed to ask before it streams tasks. Drives the
+            // `Settings → AI breakdown → Clarifying questions` pref —
+            // 0 jumps straight to tasks, 5 is the upper bound.
+            let max_questions: Int
         }
-        request.httpBody = try JSONEncoder().encode(Body(title: title, answers: answers))
+        request.httpBody = try JSONEncoder().encode(Body(
+            title: title,
+            answers: answers,
+            max_questions: UserPrefs.breakdownQuestions
+        ))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {

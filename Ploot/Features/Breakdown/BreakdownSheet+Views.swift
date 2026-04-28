@@ -132,7 +132,7 @@ extension BreakdownSheet {
                 )
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: isSelected)
+        .plootHaptic(.selection, trigger: isSelected)
     }
 
     func streamedRow(_ task: StreamedTask) -> some View {

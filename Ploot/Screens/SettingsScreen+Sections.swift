@@ -3,129 +3,84 @@ import SwiftData
 import UIKit
 import UserNotifications
 
-// All the content rows that hang off SettingsScreen's `section(...)`
-// scaffolding — appearance, subscription, notifications, data, about,
-// developer, and account. Pulled out of SettingsScreen.swift so that
-// file can stay focused on layout chrome (profile + section frame +
-// labeled-row primitive).
+// Computed-property helpers and small action handlers used by the
+// Settings screen's section layout. Pulled out of SettingsScreen.swift
+// so the layout file stays focused on IA and bindings — these are pure
+// transforms (formatters, label maps, option lists) plus the wipe /
+// notification status handlers.
 
 extension SettingsScreen {
 
-    // MARK: - Appearance
+    // MARK: - Daily routine helpers
 
-    var appearanceRow: some View {
-        HStack {
-            Text("Theme")
-                .font(.geist(size: 15, weight: 500))
-                .foregroundStyle(palette.fg1)
-            Spacer()
-            HStack(spacing: 0) {
-                ForEach(PlootTheme.allCases) { t in
-                    Button {
-                        withAnimation(Motion.spring) { theme = t }
-                    } label: {
-                        Text(t.rawValue)
-                            .font(.geist(size: 12, weight: 600))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(theme == t ? palette.onPrimary : palette.fg2)
-                            .background(Capsule().fill(theme == t ? palette.primary : .clear))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(3)
-            .background(Capsule().fill(palette.bgSunken))
-            .overlay(Capsule().strokeBorder(palette.border, lineWidth: 1))
-        }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
+    var currentStreakRule: UserPrefs.StreakRule {
+        UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit
     }
 
-    // MARK: - Subscription
-
-    var subscriptionRow: some View {
-        Button(action: openManage) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ploot Pro")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(subscriptionSubtitle)
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Text(subscriptionStatusLabel)
-                    .font(.geist(size: 12, weight: 600))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .foregroundStyle(subscription.isActive ? palette.onPrimary : palette.fg2)
-                    .background(
-                        Capsule().fill(subscription.isActive ? palette.primary : palette.bgSunken)
-                    )
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
+    func formattedTime(hour: Int, minute: Int) -> String {
+        let cal = Calendar.current
+        let date = cal.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US")
+        fmt.dateFormat = "h:mm a"
+        return fmt.string(from: date)
     }
 
-    var subscriptionStatusLabel: String {
-        subscription.isActive ? "Active" : "Inactive"
+    // MARK: - Reminders helpers
+
+    var leadTimeOptions: [(value: Int, label: String, sublabel: String?)] {
+        [
+            (0, "At due time", nil),
+            (5, "5 minutes before", nil),
+            (15, "15 minutes before", nil),
+            (30, "30 minutes before", nil),
+            (60, "1 hour before", nil),
+            (120, "2 hours before", nil)
+        ]
     }
 
-    var subscriptionSubtitle: String {
-        if subscription.isActive {
-            return "tap to manage plan, cancel, or switch to yearly"
-        } else {
-            return "your trial or subscription isn't active"
+    func leadTimeLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: return "At due"
+        case 5: return "5 min"
+        case 15: return "15 min"
+        case 30: return "30 min"
+        case 60: return "1 hr"
+        case 120: return "2 hr"
+        default: return "\(minutes) min"
         }
     }
 
-    func openManage() {
-        if subscription.isActive {
-            showingManageSubscriptions = true
-        } else {
-            // No active subscription — StoreKit's manage sheet would
-            // just say "nothing to manage". Kick off a refresh + open
-            // anyway so the user sees the status from Apple directly.
-            Task { await subscription.loadProducts() }
-            showingManageSubscriptions = true
-        }
+    var quietHoursValue: String {
+        guard quietHoursEnabled else { return "Off" }
+        return "\(formattedHour(quietHoursStart))–\(formattedHour(quietHoursEnd))"
     }
 
-    // MARK: - Notifications
+    func formattedHour(_ hour: Int) -> String {
+        let cal = Calendar.current
+        let date = cal.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US")
+        fmt.dateFormat = "h a"
+        return fmt.string(from: date).lowercased()
+    }
 
-    var notificationsRow: some View {
-        Button(action: openSystemSettings) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Reminders")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(statusSubtitle(notificationStatus))
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Text(statusLabel(notificationStatus))
-                    .font(.geist(size: 12, weight: 600))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .foregroundStyle(statusForeground(notificationStatus))
-                    .background(Capsule().fill(statusBackground(notificationStatus)))
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
+    var reminderStyleOptions: [(value: String, label: String, sublabel: String?)] {
+        [
+            ("gentle", "Gentle", "Friendly nudges. \"What's on the list today?\""),
+            ("standard", "Standard", "Plain reminders, no fluff."),
+            ("firm", "Firm", "Direct. \"Today's goal — 5 crushes.\""),
+            ("none", "Off", "No daily check-in. Task reminders still fire.")
+        ]
+    }
+
+    func reminderStyleLabel(_ raw: String) -> String {
+        switch raw {
+        case "gentle": return "Gentle"
+        case "firm": return "Firm"
+        case "none": return "Off"
+        default: return "Standard"
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
     }
 
     func statusLabel(_ s: UNAuthorizationStatus) -> String {
@@ -137,71 +92,114 @@ extension SettingsScreen {
         }
     }
 
-    func statusSubtitle(_ s: UNAuthorizationStatus) -> String {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return "you'll get a banner when a task is due"
-        case .denied: return "tap to re-enable in Settings"
-        case .notDetermined: return "toggle Remind me on any task to get asked"
-        @unknown default: return ""
-        }
-    }
-
-    func statusForeground(_ s: UNAuthorizationStatus) -> Color {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return palette.forest700
-        case .denied: return palette.plum500
-        default: return palette.fg2
-        }
-    }
-
-    func statusBackground(_ s: UNAuthorizationStatus) -> Color {
-        switch s {
-        case .authorized, .provisional, .ephemeral: return palette.forest100
-        case .denied: return palette.plum100
-        default: return palette.bgSunken
-        }
-    }
-
     @MainActor
     func refreshNotificationStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         notificationStatus = settings.authorizationStatus
     }
 
-    func openSystemSettings() {
+    func openSystemNotificationSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
     }
 
-    // MARK: - Data
+    // MARK: - Quick add helpers
 
-    var dataRows: some View {
-        VStack(spacing: 0) {
-            labeledRow(label: "Tasks", value: "\(allTasks.count)")
-            rowDivider
-            labeledRow(label: "Projects", value: "\(allProjects.count)")
-            rowDivider
-            Button(action: { confirmingWipe = true }) {
-                HStack {
-                    Text("Delete all data")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.danger)
-                    Spacer()
-                    Image(systemName: "trash")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.danger)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
-            }
-            .buttonStyle(.plain)
+    var defaultProjectOptions: [(value: String, label: String, sublabel: String?)] {
+        var options: [(value: String, label: String, sublabel: String?)] = [
+            ("", "Inbox", "Catch-all when no project is set.")
+        ]
+        for project in allProjects where project.isLive {
+            options.append((project.id, "\(project.emoji) \(project.name)", nil))
+        }
+        return options
+    }
+
+    var defaultProjectLabel: String {
+        guard !defaultProjectId.isEmpty else { return "Inbox" }
+        if let match = allProjects.first(where: { $0.id == defaultProjectId }) {
+            return match.name
+        }
+        return "Inbox"
+    }
+
+    var currentDefaultSchedule: UserPrefs.DefaultSchedule {
+        UserPrefs.DefaultSchedule(rawValue: defaultScheduleRaw) ?? .today
+    }
+
+    // MARK: - AI breakdown helpers
+
+    var timelineOptions: [(value: String, label: String, sublabel: String?)] {
+        [
+            ("drip", "Drip", "First task today, rest dateless. One step at a time."),
+            ("thisWeekend", "This weekend", "Spread across Saturday and Sunday."),
+            ("thisWeek", "This week", "Spread across the rest of the week."),
+            ("nextTwoWeeks", "Next 2 weeks", "Stretch across 14 days.")
+        ]
+    }
+
+    func timelineLabel(_ raw: String) -> String {
+        switch raw {
+        case "drip": return "Drip"
+        case "thisWeekend": return "This weekend"
+        case "thisWeek": return "This week"
+        case "nextTwoWeeks": return "Next 2 weeks"
+        default: return "Drip"
         }
     }
 
+    // MARK: - Today helpers
+
+    var currentSortOrder: UserPrefs.SortOrder {
+        UserPrefs.SortOrder(rawValue: sortOrderRaw) ?? .dueTime
+    }
+
+    // MARK: - Cleanup helpers
+
+    var autoArchiveLabel: String {
+        switch autoArchiveDays {
+        case 0: return "Never"
+        case 7: return "7 days"
+        case 30: return "30 days"
+        default: return "\(autoArchiveDays) days"
+        }
+    }
+
+    // MARK: - Pro / subscription
+
+    func openManageSubscription() {
+        if subscription.isActive {
+            showingManageSubscriptions = true
+        } else {
+            // Refresh + open anyway so the user sees current status
+            // straight from Apple's sheet.
+            Task { await subscription.loadProducts() }
+            showingManageSubscriptions = true
+        }
+    }
+
+    // MARK: - Help / mailto
+
+    func openSupportEmail() {
+        let body = "App version: \(appVersion)\nDevice: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+        let subject = "Ploot support"
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = Self.supportEmail
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: body)
+        ]
+        if let url = components.url {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    // MARK: - Wipe-all-data action
+
     func wipeAllData() {
         // Soft-delete everything. softDelete() tombstones + pushes to
-        // Supabase so the deletion propagates to other devices. Hard
-        // delete would just get re-pulled on the next foreground.
+        // Supabase so the deletion propagates to other devices.
         for task in allTasks {
             ReminderService.shared.cancel(for: task)
             for sub in task.subtasks where sub.isLive {
@@ -216,94 +214,108 @@ extension SettingsScreen {
         }
         try? modelContext.save()
     }
+}
 
-    // MARK: - About
+// MARK: - QuietHoursDetailScreen
 
-    var aboutRows: some View {
-        VStack(spacing: 0) {
-            labeledRow(label: "Version", value: appVersion)
-            rowDivider
-            Link(destination: URL(string: "https://github.com/Byk3y/ploot")!) {
-                HStack {
-                    Text("Source on GitHub")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.fg3)
+/// Pushed from the Reminders → Quiet hours row. A toggle plus two hour
+/// pickers. Kept as its own view (rather than reusing
+/// SettingsTimePickerScreen) because quiet hours uniquely needs:
+/// - an enabled toggle
+/// - hour-only granularity (no minutes)
+/// - two times in a single screen
+struct QuietHoursDetailScreen: View {
+    @Binding var enabled: Bool
+    @Binding var startHour: Int
+    @Binding var endHour: Int
+
+    @Environment(\.plootPalette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScreenFrame(
+            title: "Quiet hours",
+            leading: { HeaderButton(systemImage: "arrow.left") { dismiss() } }
+        ) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    SettingsGroup(
+                        footer: "When enabled, reminders that would fire inside the window are pushed to the next morning."
+                    ) {
+                        SettingsRow(
+                            icon: "moon.stars",
+                            label: "Enabled",
+                            trailing: .toggle($enabled)
+                        )
+                    }
+
+                    if enabled {
+                        SettingsGroup(header: "Window") {
+                            HStack {
+                                Text("Start")
+                                    .font(.geist(size: 16, weight: 500))
+                                    .foregroundStyle(palette.fg1)
+                                Spacer()
+                                Picker("", selection: $startHour) {
+                                    ForEach(0..<24, id: \.self) { h in
+                                        Text(formattedHour(h)).tag(h)
+                                    }
+                                }
+                                .labelsHidden()
+                                .tint(palette.primary)
+                            }
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.vertical, Spacing.s2)
+                            .frame(minHeight: 48)
+
+                            HStack {
+                                Text("End")
+                                    .font(.geist(size: 16, weight: 500))
+                                    .foregroundStyle(palette.fg1)
+                                Spacer()
+                                Picker("", selection: $endHour) {
+                                    ForEach(0..<24, id: \.self) { h in
+                                        Text(formattedHour(h)).tag(h)
+                                    }
+                                }
+                                .labelsHidden()
+                                .tint(palette.primary)
+                            }
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.vertical, Spacing.s2)
+                            .frame(minHeight: 48)
+                        }
+                    }
+                    Color.clear.frame(height: Spacing.s10)
                 }
                 .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
+                .padding(.top, Spacing.s2)
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .animation(Motion.spring, value: enabled)
     }
 
-    var appVersion: String {
-        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
-        return "\(short) (\(build))"
+    private func formattedHour(_ hour: Int) -> String {
+        let cal = Calendar.current
+        let date = cal.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US")
+        fmt.dateFormat = "h a"
+        return fmt.string(from: date).lowercased()
+    }
+}
+
+// MARK: - ShareSheet wrapper
+
+/// Thin UIActivityViewController bridge so SwiftUI can present the
+/// system share sheet for the App Store URL.
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
 
-    // MARK: - Developer
-
-    var developerRow: some View {
-        Button(action: { showingTestScreen = true }) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Design token test screen")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text("Phase 1 regression harness")
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.fg3)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, Spacing.s3)
-    }
-
-    // MARK: - Account
-
-    var accountRow: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Signed in")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.fg1)
-                    Text(session.currentUser?.email ?? "—")
-                        .font(.geist(size: 12, weight: 400))
-                        .foregroundStyle(palette.fg3)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.vertical, Spacing.s3)
-
-            rowDivider
-
-            Button(action: { confirmingSignOut = true }) {
-                HStack {
-                    Text("Sign out")
-                        .font(.geist(size: 15, weight: 500))
-                        .foregroundStyle(palette.danger)
-                    Spacer()
-                    Image(systemName: "arrow.right.square")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.danger)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s3)
-            }
-            .buttonStyle(.plain)
-        }
-    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

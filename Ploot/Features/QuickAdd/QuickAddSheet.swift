@@ -94,27 +94,48 @@ struct QuickAddSheet: View {
 
         let isEditing = existingTask != nil
         // Editing wins; otherwise honor the caller's initialDueDate hint
-        // (e.g. Calendar passed in the selected day). Otherwise default
-        // to today's bucket.
+        // (e.g. Calendar passed in the selected day). Fresh tasks with
+        // no hint honor `Settings → Quick add → Default schedule`.
         let seedDate: Date? = existingTask?.dueDate ?? initialDueDate
-        let parsedDue = DueOption.fromDate(seedDate)
-        // If the seed didn't fit a bucket, stash the real date in
-        // customDate so it survives.
+        let parsedDue: DueOption
         let initialCustom: Date?
-        if let seed = seedDate, parsedDue == .someday {
-            initialCustom = seed
+        if !isEditing && initialDueDate == nil {
+            switch UserPrefs.defaultSchedule {
+            case .today:
+                parsedDue = .today
+                initialCustom = nil
+            case .noDate:
+                parsedDue = .someday
+                initialCustom = nil
+            }
         } else {
-            initialCustom = nil
+            parsedDue = DueOption.fromDate(seedDate)
+            // If the seed didn't fit a bucket, stash the real date in
+            // customDate so it survives.
+            initialCustom = (seedDate != nil && parsedDue == .someday) ? seedDate : nil
         }
+
+        // Default project: existing task wins, then caller's hint, then
+        // user pref, then inbox.
+        let initialProject: String = {
+            if let pid = existingTask?.projectId { return pid }
+            if let hint = initialProjectId { return hint }
+            if let pref = UserPrefs.defaultProjectId { return pref }
+            return "inbox"
+        }()
+
+        // Default reminder: existing task wins, otherwise the
+        // `Settings → Reminders → Auto-remind new tasks` toggle drives it.
+        let initialRemind: Bool = existingTask?.remindMe ?? UserPrefs.autoRemindNew
 
         _title = State(initialValue: existingTask?.title ?? "")
         _note = State(initialValue: existingTask?.note ?? "")
-        _projectId = State(initialValue: existingTask?.projectId ?? initialProjectId ?? "inbox")
+        _projectId = State(initialValue: initialProject)
         _priority = State(initialValue: existingTask?.priority ?? .normal)
         _due = State(initialValue: parsedDue)
         _customDate = State(initialValue: initialCustom)
         _time = State(initialValue: Self.extractTimeSlot(from: seedDate))
-        _remindMe = State(initialValue: existingTask?.remindMe ?? false)
+        _remindMe = State(initialValue: initialRemind)
         _repeats = State(initialValue: RepeatOption.fromStored(existingTask?.repeats))
         let initialSubs = existingTask?.subtasks
             .filter(\.isLive)

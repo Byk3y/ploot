@@ -164,16 +164,27 @@ final class ReminderService {
     /// Where the notification actually fires. If the task's dueDate is
     /// midnight-aligned (user picked a day with no time slot), shift to
     /// 9 AM local that day — notifying someone about "water the plant"
-    /// at 00:00 is rude. Otherwise fire at the exact dueDate.
+    /// at 00:00 is rude. Then subtract the user's default lead time
+    /// (Settings → Reminders → Default lead time) so a 5pm task with a
+    /// 15-minute lead fires at 4:45pm. Finally, defer past quiet hours
+    /// when the resulting fire date falls inside the user's quiet
+    /// window — better to ping after they're awake than not at all.
     private func reminderFireDate(for task: PlootTask) -> Date? {
         guard let due = task.dueDate else { return nil }
         let cal = Calendar.current
         let hour = cal.component(.hour, from: due)
         let minute = cal.component(.minute, from: due)
+        let normalized: Date
         if hour == 0 && minute == 0 {
-            return cal.date(bySettingHour: 9, minute: 0, second: 0, of: due)
+            normalized = cal.date(bySettingHour: 9, minute: 0, second: 0, of: due) ?? due
+        } else {
+            normalized = due
         }
-        return due
+        let lead = UserPrefs.defaultLeadMinutes
+        let withLead = lead > 0
+            ? normalized.addingTimeInterval(-Double(lead) * 60)
+            : normalized
+        return UserPrefs.deferPastQuietHours(withLead, calendar: cal)
     }
 
     /// Brand-voice notification body. Prefers the user's own note when

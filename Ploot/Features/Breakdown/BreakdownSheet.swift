@@ -28,10 +28,11 @@ struct BreakdownSheet: View {
     @State var completedCount: Int = 0
     @State var finishedHaptic: Int = 0
     @State var donePulse: Bool = false
-    /// User-selected timeline window for the streamed tasks. Defaults to
-    /// `.drip` (existing one-at-a-time behavior). Other values trigger
-    /// `applyTimeline(...)` which re-stamps every task's dueDate.
-    @State var timelineMode: TimelineMode = .drip
+    /// User-selected timeline window for the streamed tasks. Defaults
+    /// from `Settings → AI breakdown → Default timeline`. Picking
+    /// anything else triggers `applyTimeline(...)` which re-stamps every
+    /// task's dueDate.
+    @State var timelineMode: TimelineMode = TimelineMode.fromPref(UserPrefs.defaultTimelineMode)
     /// Captured when the sheet opens so every task in a single breakdown
     /// batch shares a base timestamp — insertion order then becomes the
     /// only distinguishing factor in createdAt.
@@ -85,7 +86,7 @@ struct BreakdownSheet: View {
             }
         }
         .background(palette.bg.ignoresSafeArea())
-        .sensoryFeedback(.success, trigger: finishedHaptic)
+        .plootHaptic(.success, trigger: finishedHaptic)
         .onAppear(perform: startInitialStream)
         .onDisappear {
             streamTask?.cancel()
@@ -287,6 +288,13 @@ struct BreakdownSheet: View {
             if count > 0 {
                 finishedHaptic &+= 1
                 withAnimation(Motion.spring) { phase = .finished }
+                // Apply the user's default timeline immediately so a
+                // pref of "this week" actually spreads the tasks
+                // without requiring a chip tap. .drip is a no-op
+                // restore so it's safe to always call.
+                if timelineMode != .drip {
+                    applyTimeline(timelineMode)
+                }
                 pulseDoneButton()
             }
 

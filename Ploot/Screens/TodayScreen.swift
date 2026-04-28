@@ -11,8 +11,7 @@ struct TodayScreen: View {
     @AppStorage("displayName") private var displayName: String = "You"
     @AppStorage(UserPrefs.Key.dailyGoal) private var dailyGoal: Int = 5
     @AppStorage(UserPrefs.Key.trackStreak) private var trackStreak: Bool = true
-    @AppStorage(UserPrefs.Key.streakCount) private var streakCount: Int = 0
-    @AppStorage(UserPrefs.Key.streakLastDate) private var streakLastDate: String = ""
+    @AppStorage(UserPrefs.Key.streakRule) private var streakRuleRaw: String = UserPrefs.StreakRule.goalHit.rawValue
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
     @Bindable private var subscription = SubscriptionManager.shared
@@ -75,7 +74,10 @@ struct TodayScreen: View {
                 TrialEndingBanner(subscription: subscription)
                 progressStrip
                 let overdue = TaskHelpers.tasks(in: .overdue, from: allTasks)
-                if !overdue.isEmpty {
+                let todayBucket = TaskHelpers.tasks(in: .today, from: allTasks)
+                let showOverdueSection = UserPrefs.showOverdueSeparately && !overdue.isEmpty
+
+                if showOverdueSection {
                     Section {
                         ForEach(overdue) { row($0) }
                     } header: {
@@ -83,7 +85,13 @@ struct TodayScreen: View {
                     }
                 }
 
-                let today = TaskHelpers.tasks(in: .today, from: allTasks)
+                // When the user has opted to merge overdue into Today
+                // (Settings → Today → Show overdue separately = off),
+                // tack overdue onto the front of the today list so it
+                // still appears at the top of the section.
+                let today: [PlootTask] = showOverdueSection
+                    ? todayBucket
+                    : overdue + todayBucket
                 Section {
                     if today.isEmpty {
                         EmptyState(
@@ -151,29 +159,20 @@ struct TodayScreen: View {
     }
 
     private var streakBadge: some View {
-        // Live-streak logic mirrors StreakManager.displayCount but we
-        // compute inline so the @AppStorage observation triggers redraws
-        // when streakLastDate changes.
-        let displayCount: Int = {
-            guard !streakLastDate.isEmpty else { return 0 }
-            let today = UserPrefs.dateKey()
-            if streakLastDate == today { return streakCount }
-            let yesterday = UserPrefs.dateKey(
-                for: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-            )
-            return streakLastDate == yesterday ? streakCount : 0
-        }()
-        let isAtRisk = displayCount > 0 && streakLastDate != UserPrefs.dateKey()
-        let isCold = displayCount == 0
-        let isDimmed = isCold || isAtRisk
+        // Single-source streak: derived from `completedAt` via TaskHelpers
+        // so this badge can never drift from the Done screen's hero.
+        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit
+        let count = TaskHelpers.streak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
+        let state = TaskHelpers.streakState(from: allTasks, rule: rule, dailyGoal: dailyGoal)
+        let isDimmed = state != .onFire
 
         return HStack(spacing: 2) {
             FireLottieView(isDimmed: isDimmed)
                 .frame(width: 36, height: 36)
-            Text("\(displayCount)")
+            Text("\(count)")
                 .font(.fraunces(size: 22, weight: 600))
                 .foregroundStyle(isDimmed ? palette.fg3 : palette.fg1)
-                .contentTransition(.numericText(value: Double(displayCount)))
+                .contentTransition(.numericText(value: Double(count)))
         }
     }
 
@@ -185,13 +184,29 @@ struct TodayScreen: View {
             onToggle: { task.setDone($0) },
             onOpen: { onOpen(task) },
             onEdit: { editingTask = task },
-            onDelete: { deletingTask = task },
+            onDelete: { requestDelete(task) },
             onRescheduleToday: { rescheduleToToday(task) }
         )
         .transition(.asymmetric(
             insertion: .move(edge: .leading).combined(with: .opacity),
             removal: .move(edge: .trailing).combined(with: .opacity)
         ))
+    }
+
+    /// Route a delete tap through the user's "confirm before delete"
+    /// preference. When confirm is on, opens the alert; when off,
+    /// softDeletes immediately (still animated, still cancels the
+    /// reminder, still pushes the tombstone).
+    private func requestDelete(_ task: PlootTask) {
+        if UserPrefs.confirmBeforeDelete {
+            deletingTask = task
+        } else {
+            ReminderService.shared.cancel(for: task)
+            withAnimation(Motion.spring) {
+                task.softDelete()
+                try? modelContext.save()
+            }
+        }
     }
 
     /// Push the task's dueDate forward — to *today* when it's a past-day

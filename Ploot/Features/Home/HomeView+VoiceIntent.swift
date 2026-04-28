@@ -32,8 +32,13 @@ extension HomeView {
         case .project(let title):
             let project = insertProject(title: title)
             withAnimation(Motion.spring) { voicePhase = nil }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                breakdownProject = project
+            // Skip the auto-breakdown sheet when the user has turned AI
+            // breakdown off in Settings — they get a created project,
+            // no follow-up sparkle prompt.
+            if UserPrefs.useAIBreakdown {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                    breakdownProject = project
+                }
             }
 
         case .ambiguous:
