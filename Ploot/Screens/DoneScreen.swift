@@ -8,7 +8,7 @@ struct DoneScreen: View {
     @Query private var projects: [PlootProject]
 
     @AppStorage(UserPrefs.Key.dailyGoal) private var dailyGoal: Int = 5
-    @AppStorage(UserPrefs.Key.streakRule) private var streakRuleRaw: String = UserPrefs.StreakRule.goalHit.rawValue
+    @AppStorage(UserPrefs.Key.streakRule) private var streakRuleRaw: String = UserPrefs.StreakRule.anyTask.rawValue
 
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
@@ -88,7 +88,7 @@ struct DoneScreen: View {
     // MARK: - Hero card (single source of streak + week story)
 
     private var heroCard: some View {
-        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit
+        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask
         let streak = TaskHelpers.streak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
         let best = TaskHelpers.bestStreak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
         let state = TaskHelpers.streakState(from: allTasks, rule: rule, dailyGoal: dailyGoal)

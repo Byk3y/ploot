@@ -14,7 +14,7 @@ extension SettingsScreen {
     // MARK: - Daily routine helpers
 
     var currentStreakRule: UserPrefs.StreakRule {
-        UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit
+        UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask
     }
 
     func formattedTime(hour: Int, minute: Int) -> String {

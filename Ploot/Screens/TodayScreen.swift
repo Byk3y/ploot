@@ -11,7 +11,7 @@ struct TodayScreen: View {
     @AppStorage("displayName") private var displayName: String = "You"
     @AppStorage(UserPrefs.Key.dailyGoal) private var dailyGoal: Int = 5
     @AppStorage(UserPrefs.Key.trackStreak) private var trackStreak: Bool = true
-    @AppStorage(UserPrefs.Key.streakRule) private var streakRuleRaw: String = UserPrefs.StreakRule.goalHit.rawValue
+    @AppStorage(UserPrefs.Key.streakRule) private var streakRuleRaw: String = UserPrefs.StreakRule.anyTask.rawValue
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
     @Bindable private var subscription = SubscriptionManager.shared
@@ -161,7 +161,7 @@ struct TodayScreen: View {
     private var streakBadge: some View {
         // Single-source streak: derived from `completedAt` via TaskHelpers
         // so this badge can never drift from the Done screen's hero.
-        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit
+        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask
         let count = TaskHelpers.streak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
         let state = TaskHelpers.streakState(from: allTasks, rule: rule, dailyGoal: dailyGoal)
         let isDimmed = state != .onFire

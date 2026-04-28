@@ -28,7 +28,7 @@ struct SettingsScreen: View {
     @AppStorage(UserPrefs.Key.checkinHour) var checkinHour: Int = 8
     @AppStorage(UserPrefs.Key.checkinMinute) var checkinMinute: Int = 47
     @AppStorage(UserPrefs.Key.trackStreak) var trackStreak: Bool = true
-    @AppStorage(UserPrefs.Key.streakRule) var streakRuleRaw: String = UserPrefs.StreakRule.goalHit.rawValue
+    @AppStorage(UserPrefs.Key.streakRule) var streakRuleRaw: String = UserPrefs.StreakRule.anyTask.rawValue
 
     // Reminders
     @AppStorage(UserPrefs.Key.autoRemindNew) var autoRemindNew: Bool = false
@@ -247,11 +247,11 @@ struct SettingsScreen: View {
                     title: "Streak rule",
                     footer: "What it takes for a day to count toward your streak.",
                     options: [
-                        (UserPrefs.StreakRule.goalHit, "Goal hit", "You completed at least \(dailyGoal) tasks today."),
-                        (UserPrefs.StreakRule.anyTask, "Any task done", "A single completion keeps the streak alive.")
+                        (UserPrefs.StreakRule.anyTask, "Any task done", "A single completion keeps the streak alive."),
+                        (UserPrefs.StreakRule.goalHit, "Goal hit", "You completed at least \(dailyGoal) tasks today.")
                     ],
                     selection: Binding(
-                        get: { UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .goalHit },
+                        get: { UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask },
                         set: { streakRuleRaw = $0.rawValue }
                     )
                 )

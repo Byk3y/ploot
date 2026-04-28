@@ -92,7 +92,11 @@ enum UserPrefs {
         }
     }
     static var streakRule: StreakRule {
-        StreakRule(rawValue: string(Key.streakRule, default: StreakRule.goalHit.rawValue)) ?? .goalHit
+        // Default to .anyTask — on-brand "calm, not punishing": one
+        // completion is enough to keep the streak alive. Users who want
+        // the stricter "complete the daily goal" bar can switch in
+        // Settings → Daily routine → "Streak counts when…".
+        StreakRule(rawValue: string(Key.streakRule, default: StreakRule.anyTask.rawValue)) ?? .anyTask
     }
 
     // Reminders
