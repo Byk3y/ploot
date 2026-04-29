@@ -108,7 +108,7 @@ struct TodayScreen: View {
                     ? todayBucket
                     : overdue + todayBucket
                 Section {
-                    if today.isEmpty {
+                    if today.isEmpty && activeSteps.isEmpty {
                         EmptyState(
                             systemImage: "flag.checkered",
                             title: "All done!",
