@@ -78,7 +78,6 @@ enum BreakdownService {
 
         if http.statusCode != 200 {
             try await handleNon200(statusCode: http.statusCode, bytes: bytes)
-            return
         }
 
         for try await line in bytes.lines {
