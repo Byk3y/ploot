@@ -1,0 +1,26 @@
+{
+  "images" : [
+    {
+      "idiom" : "universal",
+      "filename" : "SproutDrooping.png",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "filename" : "SproutDrooping@2x.png",
+      "scale" : "2x"
+    },
+    {
+      "idiom" : "universal",
+      "filename" : "SproutDrooping@3x.png",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
+  }
+}

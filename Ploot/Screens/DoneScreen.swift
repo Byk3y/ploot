@@ -97,8 +97,8 @@ struct DoneScreen: View {
 
         return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .center, spacing: 10) {
-                FireLottieView(isDimmed: state != .onFire)
-                    .frame(width: 72, height: 72)
+                PlootMascotView(state: state, isDimmed: state != .onFire)
+                    .frame(width: 96, height: 96)
                 streakHeader(
                     streak: streak,
                     best: best,
@@ -128,6 +128,11 @@ struct DoneScreen: View {
                 .font(.fraunces(size: 32, weight: 600))
                 .foregroundStyle(palette.fg1)
                 .contentTransition(.numericText(value: Double(streak)))
+            // Small streak fire next to the number — universal shorthand
+            // for "streak". Dims when the streak isn't on fire so it
+            // doesn't shout when there's nothing to celebrate.
+            FireLottieView(isDimmed: state != .onFire)
+                .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text("day streak")
                     .font(.geist(size: 13, weight: 600))

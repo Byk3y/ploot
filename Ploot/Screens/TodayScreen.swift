@@ -21,9 +21,7 @@ struct TodayScreen: View {
 
     var body: some View {
         ScreenFrame(
-            title: "Today",
-            titleSuffix: AnyView(todaySuffix),
-            subtitle: TaskHelpers.todayVoiceLine(from: allTasks, displayName: displayName),
+            title: "Ploot",
             trailing: { trailingAvatar },
             content: { list }
         )
@@ -60,12 +58,6 @@ struct TodayScreen: View {
                 .overlay(Circle().strokeBorder(palette.borderInk, lineWidth: 2))
         }
         .buttonStyle(.plain)
-    }
-
-    private var todaySuffix: some View {
-        Text(" · \(Self.dateText())")
-            .font(.fraunces(size: 22, weight: 400, opsz: 22, soft: 100, italic: true))
-            .foregroundStyle(palette.fg3)
     }
 
     private var list: some View {
@@ -129,50 +121,48 @@ struct TodayScreen: View {
         let goal = max(1, dailyGoal)
         let pct = min(1.0, Double(doneToday) / Double(goal))
 
+        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask
+        let streakCount = TaskHelpers.streak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
+        let streakState = TaskHelpers.streakState(from: allTasks, rule: rule, dailyGoal: dailyGoal)
+
         return HStack(alignment: .center, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(doneToday)")
-                        .font(.fraunces(size: 28, weight: 600, opsz: 72, soft: 40))
-                        .foregroundStyle(palette.fg1)
-                        .contentTransition(.numericText())
-                        .animation(Motion.spring, value: doneToday)
-                    Text(progressSecondary(doneToday: doneToday, goal: goal))
-                        .font(.geist(size: 13, weight: 500))
-                        .foregroundStyle(doneToday >= goal ? palette.clay500 : palette.fg3)
-                        .contentTransition(.opacity)
-                }
+                streakHeader(count: streakCount, state: streakState)
                 ProgressBar(value: pct)
             }
             if trackStreak {
-                streakBadge
+                PlootMascotView(state: streakState, isDimmed: streakState != .onFire)
+                    .frame(width: 56, height: 56)
             }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s4)
     }
 
-    private func progressSecondary(doneToday: Int, goal: Int) -> String {
-        if doneToday < goal { return "of \(goal)" }
-        if doneToday == goal { return "done · goal!" }
-        return "done · +\(doneToday - goal)"
-    }
-
-    private var streakBadge: some View {
-        // Single-source streak: derived from `completedAt` via TaskHelpers
-        // so this badge can never drift from the Done screen's hero.
-        let rule = UserPrefs.StreakRule(rawValue: streakRuleRaw) ?? .anyTask
-        let count = TaskHelpers.streak(from: allTasks, rule: rule, dailyGoal: dailyGoal)
-        let state = TaskHelpers.streakState(from: allTasks, rule: rule, dailyGoal: dailyGoal)
-        let isDimmed = state != .onFire
-
-        return HStack(spacing: 2) {
-            FireLottieView(isDimmed: isDimmed)
-                .frame(width: 36, height: 36)
+    /// Hero label for the progress strip. Replaces the older "1 of 3"
+    /// daily count — the bar already shows that visually. The streak
+    /// is the more meaningful narrative, so it gets the prominent
+    /// number slot. Fire signifies "streak", count is the number,
+    /// "day streak" makes it concrete.
+    ///
+    /// Uses `.center` alignment because Lottie views don't expose a
+    /// text baseline — `.firstTextBaseline` dropped the flame to a
+    /// second line.
+    @ViewBuilder
+    private func streakHeader(count: Int, state: TaskHelpers.StreakState) -> some View {
+        let isOnFire = state == .onFire
+        HStack(alignment: .center, spacing: 6) {
+            FireLottieView(isDimmed: !isOnFire)
+                .frame(width: 44, height: 44)
             Text("\(count)")
-                .font(.fraunces(size: 22, weight: 600))
-                .foregroundStyle(isDimmed ? palette.fg3 : palette.fg1)
+                .font(.fraunces(size: 28, weight: 600, opsz: 72, soft: 40))
+                .foregroundStyle(isOnFire ? palette.clay500 : palette.fg1)
                 .contentTransition(.numericText(value: Double(count)))
+                .animation(Motion.spring, value: count)
+            Text("day streak")
+                .font(.geist(size: 13, weight: 500))
+                .foregroundStyle(isOnFire ? palette.clay500 : palette.fg3)
+                .padding(.bottom, 2)
         }
     }
 
@@ -252,10 +242,4 @@ struct TodayScreen: View {
         SyncService.shared.push(task: task)
     }
 
-    private static func dateText() -> String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US")
-        fmt.dateFormat = "EEEE, MMM d"
-        return fmt.string(from: Date())
-    }
 }

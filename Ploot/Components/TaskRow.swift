@@ -75,8 +75,8 @@ struct TaskRow: View {
             Button {
                 onToggle(!task.done)
             } label: {
-                Label(task.done ? "Mark as not done" : "Mark as done",
-                      systemImage: task.done ? "circle" : "checkmark.circle")
+                Label(task.done ? "Bring it back" : "Mark as done",
+                      systemImage: task.done ? "arrow.uturn.backward.circle" : "checkmark.circle")
             }
             if TaskHelpers.isLate(task), let onRescheduleToday {
                 // Past-day overdue → move to today. Same-day past-time

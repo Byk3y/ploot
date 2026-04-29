@@ -1,7 +1,17 @@
 import SwiftUI
 
+/// Empty-state surfaces lead with Ploot the cat, not an SF Symbol.
+/// `mascotPose` picks which Ploot shows up — defaults to the
+/// "victory lap" `PlootDone` for "all done" type messages and
+/// `PlootConfused` for "nothing here" type messages. Callers that
+/// don't pass a mascot pose still get a Ploot, just the default one
+/// for `systemImage == "tray"` heuristic.
 struct EmptyState<Action: View>: View {
+    /// Legacy hook — still accepted but ignored when `mascotPose` is
+    /// set. Kept so existing call sites don't all need to migrate at
+    /// once. New call sites should pass `mascotPose:` instead.
     var systemImage: String?
+    var mascotPose: PlootMascotView.Pose
     var title: String
     var subtitle: String? = nil
     @ViewBuilder var action: () -> Action
@@ -10,12 +20,9 @@ struct EmptyState<Action: View>: View {
 
     var body: some View {
         VStack(spacing: Spacing.s3) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: 72, weight: .light))
-                    .foregroundStyle(palette.primary.opacity(0.85))
-                    .padding(.bottom, 4)
-            }
+            PlootMascotView(mascotPose)
+                .frame(width: 140, height: 140)
+                .padding(.bottom, 4)
             Text(title)
                 .font(.fraunces(size: 24, weight: 600))
                 .tracking(-0.015 * 24)
@@ -38,10 +45,37 @@ struct EmptyState<Action: View>: View {
 }
 
 extension EmptyState where Action == EmptyView {
-    init(systemImage: String? = nil, title: String, subtitle: String? = nil) {
-        self.systemImage = systemImage
+    /// New preferred initializer — pick the mascot pose explicitly.
+    init(
+        mascotPose: PlootMascotView.Pose,
+        title: String,
+        subtitle: String? = nil
+    ) {
+        self.systemImage = nil
+        self.mascotPose = mascotPose
         self.title = title
         self.subtitle = subtitle
         self.action = { EmptyView() }
+    }
+
+    /// Back-compat for existing callers that pass an SF Symbol. Maps
+    /// the symbol to a sensible Ploot pose so the screen still gets
+    /// the right vibe without every call site needing edits.
+    init(systemImage: String? = nil, title: String, subtitle: String? = nil) {
+        self.systemImage = systemImage
+        self.mascotPose = Self.poseForSymbol(systemImage)
+        self.title = title
+        self.subtitle = subtitle
+        self.action = { EmptyView() }
+    }
+
+    private static func poseForSymbol(_ symbol: String?) -> PlootMascotView.Pose {
+        switch symbol {
+        case "flag.checkered":  return .named("PlootPointing")    // "All done!" — celebratory until PlootDone art lands
+        case "tray":            return .named("PlootConfused")    // "Nothing here"
+        case "calendar":        return .named("PlootPeeking")     // calendar empty — falls back until PlootResearch art lands
+        case "folder":          return .named("PlootConfused")    // empty project
+        default:                return .named("PlootConfused")
+        }
     }
 }
