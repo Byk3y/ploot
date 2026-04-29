@@ -107,18 +107,20 @@ struct TodayScreen: View {
                 let today: [PlootTask] = showOverdueSection
                     ? todayBucket
                     : overdue + todayBucket
-                Section {
-                    if today.isEmpty && activeSteps.isEmpty {
-                        EmptyState(
-                            systemImage: "flag.checkered",
-                            title: "All done!",
-                            subtitle: "You finished today's list. Take a victory lap — you've earned it."
-                        )
-                    } else {
-                        ForEach(today) { row($0) }
+                if !today.isEmpty || activeSteps.isEmpty {
+                    Section {
+                        if today.isEmpty {
+                            EmptyState(
+                                systemImage: "flag.checkered",
+                                title: "All done!",
+                                subtitle: "You finished today's list. Take a victory lap — you've earned it."
+                            )
+                        } else {
+                            ForEach(today) { row($0) }
+                        }
+                    } header: {
+                        SectionHeader(title: "Today", count: today.count)
                     }
-                } header: {
-                    SectionHeader(title: "Today", count: today.count)
                 }
 
                 let later = TaskHelpers.tasks(in: .later, from: allTasks)
