@@ -46,14 +46,6 @@ final class SubscriptionManager {
     /// True if the user has the `pro` entitlement active (includes trial).
     var isActive: Bool = false
 
-    /// When the current period (trial or regular) ends, per RC. Used
-    /// by TrialEndingBanner + ReminderService to warn before lockout.
-    var currentPeriodEndsAt: Date? = nil
-
-    /// True when the active entitlement is still in the free-trial
-    /// introductory-offer period.
-    var isInTrial: Bool = false
-
     /// When the subscription went from active → inactive, if the flip
     /// happened within the current launch. Lockscreen reads this to
     /// pick warmer "just expired" copy vs. "come back" copy.
@@ -127,8 +119,6 @@ final class SubscriptionManager {
         self.customerInfo = info
         let pro = info.entitlements[Self.entitlementID]
         let active = pro?.isActive == true
-        let endDate = pro?.expirationDate
-        let inTrial = pro?.periodType == .trial
 
         // Capture the flip to inactive for lockscreen "just expired" copy.
         if self.isActive && !active {
@@ -136,32 +126,6 @@ final class SubscriptionManager {
         }
 
         self.isActive = active
-        self.currentPeriodEndsAt = endDate
-        self.isInTrial = inTrial
-
-        // Reschedule (or cancel) the T-2h trial-end push whenever the
-        // entitlement state changes. RC doesn't do local scheduling for
-        // us — this is our "last chance" reinforcement.
-        ReminderService.shared.scheduleTrialEndingReminder(
-            at: endDate,
-            isInTrial: inTrial
-        )
-    }
-
-    /// Minutes remaining until the current period ends. Nil if not
-    /// active or the date is in the past.
-    var minutesUntilEnd: Int? {
-        guard let end = currentPeriodEndsAt else { return nil }
-        let delta = end.timeIntervalSinceNow
-        guard delta > 0 else { return nil }
-        return Int(delta / 60)
-    }
-
-    /// True when we're within 24 hours of the period ending. Drives
-    /// the Today-screen banner visibility.
-    var isWithin24HoursOfEnd: Bool {
-        guard let mins = minutesUntilEnd else { return false }
-        return mins <= 60 * 24
     }
 
     // MARK: - Purchase
@@ -267,18 +231,10 @@ final class SubscriptionManager {
     #if DEBUG
     /// Flip `isActive` true without going through RC. Lets the owner
     /// walk past the paywall (screen 21) during dev before App Store
-    /// Connect + RC In-App Purchase Key are configured. Simulates a
-    /// 7-day trial so the TrialEndingBanner + lockscreen paths are
-    /// still exercisable. Stripped from release builds.
+    /// Connect + RC In-App Purchase Key are configured. Stripped from
+    /// release builds.
     func debugBypassPaywall() {
-        let end = Date().addingTimeInterval(60 * 60 * 24 * 7)
         self.isActive = true
-        self.isInTrial = true
-        self.currentPeriodEndsAt = end
-        ReminderService.shared.scheduleTrialEndingReminder(
-            at: end,
-            isInTrial: true
-        )
     }
     #endif
 }
