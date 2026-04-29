@@ -63,8 +63,33 @@ struct TodayScreen: View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 progressStrip
+                let activeSteps = TaskHelpers.activeProjectSteps(from: allTasks, projects: projects)
+                let activeStepIDs = Set(activeSteps.map { $0.task.id })
+
+                if !activeSteps.isEmpty {
+                    Section {
+                        ForEach(activeSteps) { item in
+                            TodayNextStepCard(
+                                task: item.task,
+                                project: item.project,
+                                progress: item.progress,
+                                onToggle: { item.task.setDone($0) },
+                                onOpen: { onOpen(item.task) }
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                        }
+                    } header: {
+                        SectionHeader(title: "Next steps", count: activeSteps.count)
+                    }
+                }
+
                 let overdue = TaskHelpers.tasks(in: .overdue, from: allTasks)
+                    .filter { !activeStepIDs.contains($0.id) }
                 let todayBucket = TaskHelpers.tasks(in: .today, from: allTasks)
+                    .filter { !activeStepIDs.contains($0.id) }
                 let showOverdueSection = UserPrefs.showOverdueSeparately && !overdue.isEmpty
 
                 if showOverdueSection {
@@ -97,6 +122,7 @@ struct TodayScreen: View {
                 }
 
                 let later = TaskHelpers.tasks(in: .later, from: allTasks)
+                    .filter { !activeStepIDs.contains($0.id) }
                 if !later.isEmpty {
                     Section {
                         ForEach(later) { row($0) }
@@ -240,4 +266,103 @@ struct TodayScreen: View {
         SyncService.shared.push(task: task)
     }
 
+}
+
+private struct TodayNextStepCard: View {
+    let task: PlootTask
+    let project: PlootProject
+    let progress: TaskHelpers.ProjectProgress
+    let onToggle: (Bool) -> Void
+    let onOpen: () -> Void
+
+    @Environment(\.plootPalette) private var palette
+    @State private var justCompleted = false
+
+    private var showAsDone: Bool { task.done || justCompleted }
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(alignment: .top, spacing: 10) {
+                    PlootCheckbox(
+                        checked: showAsDone,
+                        priority: task.priority,
+                        size: 24,
+                        onToggle: handleToggle
+                    )
+                    .padding(.top, 1)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 7) {
+                            Text(project.emoji)
+                                .font(.system(size: 14))
+                            Text(project.name)
+                                .font(.jetBrainsMono(size: 11, weight: 700))
+                                .tracking(11 * 0.08)
+                                .textCase(.uppercase)
+                                .foregroundStyle(palette.fg2)
+                                .lineLimit(1)
+                        }
+
+                        Text(task.title.strippingLeadingEmoji())
+                            .font(.geist(size: 15, weight: 600))
+                            .foregroundStyle(palette.fg1)
+                            .strikethrough(showAsDone, color: palette.fg2)
+                            .opacity(showAsDone ? 0.5 : 1)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        HStack(spacing: 6) {
+                            Text("step \(min(progress.done + 1, progress.total)) of \(progress.total) · queued for today")
+                                .contentTransition(.numericText(value: Double(progress.done)))
+                        }
+                        .font(.geist(size: 12, weight: 500))
+                        .foregroundStyle(palette.fg3)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(palette.bgSunken)
+                        Capsule()
+                            .fill(project.tileColor.dot(palette: palette))
+                            .frame(width: progress.fraction * geo.size.width)
+                    }
+                }
+                .frame(height: 5)
+            }
+            .cardStyle(radius: Radius.lg, padding: 12)
+            .padding(.horizontal, Spacing.s4)
+            .padding(.bottom, 8)
+        }
+        .buttonStyle(.plain)
+        .animation(Motion.spring, value: showAsDone)
+    }
+
+    private func handleToggle(_ value: Bool) {
+        if value {
+            justCompleted = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                withAnimation(Motion.spring) {
+                    onToggle(true)
+                }
+            }
+        } else {
+            withAnimation(Motion.spring) {
+                onToggle(false)
+            }
+        }
+    }
+}
+
+extension String {
+    func strippingLeadingEmoji() -> String {
+        return self.replacingOccurrences(
+            of: "^(\\s*[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]\\s*)+",
+            with: "",
+            options: .regularExpression
+        )
+    }
 }

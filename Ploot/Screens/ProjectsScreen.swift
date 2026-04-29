@@ -36,8 +36,8 @@ struct ProjectsScreen: View {
                             ForEach(liveProjects) { project in
                                 ProjectCard(
                                     project: project,
-                                    openCount: openCount(for: project),
-                                    doneCount: doneCount(for: project),
+                                    progress: TaskHelpers.projectProgress(for: project, from: allTasks),
+                                    nextStep: TaskHelpers.nextProjectStep(for: project, from: allTasks),
                                     onOpen: { onOpenProject(project) },
                                     onEdit: { editingProject = project },
                                     onDelete: { deletingProject = project }
@@ -100,14 +100,6 @@ struct ProjectsScreen: View {
         }
     }
 
-    private func openCount(for project: PlootProject) -> Int {
-        allTasks.filter { $0.isLive && $0.projectId == project.id && !$0.done }.count
-    }
-
-    private func doneCount(for project: PlootProject) -> Int {
-        allTasks.filter { $0.isLive && $0.projectId == project.id && $0.done }.count
-    }
-
     private func taskCount(for projectId: String) -> Int {
         allTasks.filter { $0.isLive && $0.projectId == projectId }.count
     }
@@ -135,8 +127,8 @@ struct ProjectsScreen: View {
 
 private struct ProjectCard: View {
     let project: PlootProject
-    let openCount: Int
-    let doneCount: Int
+    let progress: TaskHelpers.ProjectProgress
+    let nextStep: PlootTask?
     let onOpen: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -144,9 +136,6 @@ private struct ProjectCard: View {
     @Environment(\.plootPalette) private var palette
 
     var body: some View {
-        let total = openCount + doneCount
-        let pct = total == 0 ? 0 : Double(doneCount) / Double(total)
-
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 HStack(spacing: Spacing.s3) {
@@ -169,11 +158,11 @@ private struct ProjectCard: View {
                             .foregroundStyle(palette.fg1)
 
                         HStack(spacing: Spacing.s2) {
-                            Text("\(openCount) open")
-                                .contentTransition(.numericText(value: Double(openCount)))
+                            Text("\(progress.open) open")
+                                .contentTransition(.numericText(value: Double(progress.open)))
                             Circle().fill(palette.fg3).frame(width: 3, height: 3)
-                            Text("\(doneCount) done")
-                                .contentTransition(.numericText(value: Double(doneCount)))
+                            Text("\(progress.done) done")
+                                .contentTransition(.numericText(value: Double(progress.done)))
                         }
                         .font(.geist(size: 13, weight: 400))
                         .foregroundStyle(palette.fg3)
@@ -186,13 +175,15 @@ private struct ProjectCard: View {
                         .foregroundStyle(palette.fg3)
                 }
 
+                nextStepLine
+
                 // Mini progress bar
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(palette.bgSunken)
                         Capsule()
                             .fill(project.tileColor.dot(palette: palette))
-                            .frame(width: pct * geo.size.width)
+                            .frame(width: progress.fraction * geo.size.width)
                     }
                 }
                 .frame(height: 5)
@@ -208,5 +199,28 @@ private struct ProjectCard: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+
+    private var nextStepLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: nextStep == nil ? "sparkles" : "arrow.turn.down.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(project.tileColor.dot(palette: palette))
+                .frame(width: 14)
+
+            Text(nextStepCopy)
+                .font(.geist(size: 13, weight: 500))
+                .foregroundStyle(palette.fg2)
+                .lineLimit(1)
+        }
+    }
+
+    private var nextStepCopy: String {
+        guard let nextStep else {
+            return progress.total == 0
+                ? "ready to break down."
+                : "wrapped. suspiciously competent."
+        }
+        return "next: \(nextStep.title)"
     }
 }

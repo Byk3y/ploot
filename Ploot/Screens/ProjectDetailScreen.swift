@@ -106,10 +106,7 @@ struct ProjectDetailScreen: View {
     // MARK: - Header
 
     private func projectHeader(tasks: [PlootTask]) -> some View {
-        let openCount = tasks.filter { !$0.done }.count
-        let doneCount = tasks.filter { $0.done }.count
-        let total = openCount + doneCount
-        let pct = total == 0 ? 0 : Double(doneCount) / Double(total)
+        let progress = TaskHelpers.projectProgress(for: project, from: tasks)
 
         return VStack(alignment: .leading, spacing: Spacing.s4) {
             HStack(alignment: .center, spacing: Spacing.s4) {
@@ -133,11 +130,11 @@ struct ProjectDetailScreen: View {
                         .foregroundStyle(palette.fg1)
                         .lineLimit(2)
                     HStack(spacing: Spacing.s2) {
-                        Text("\(openCount) open")
-                            .contentTransition(.numericText(value: Double(openCount)))
+                        Text("\(progress.open) open")
+                            .contentTransition(.numericText(value: Double(progress.open)))
                         Circle().fill(palette.fg3).frame(width: 3, height: 3)
-                        Text("\(doneCount) done")
-                            .contentTransition(.numericText(value: Double(doneCount)))
+                        Text("\(progress.done) done")
+                            .contentTransition(.numericText(value: Double(progress.done)))
                     }
                     .font(.geist(size: 13, weight: 400))
                     .foregroundStyle(palette.fg3)
@@ -150,7 +147,7 @@ struct ProjectDetailScreen: View {
                     Capsule().fill(palette.bgSunken)
                     Capsule()
                         .fill(project.tileColor.dot(palette: palette))
-                        .frame(width: pct * geo.size.width)
+                        .frame(width: progress.fraction * geo.size.width)
                 }
                 .overlay(Capsule().strokeBorder(palette.borderInk, lineWidth: 1.5))
             }
@@ -186,50 +183,79 @@ struct ProjectDetailScreen: View {
             }
             .padding(.top, Spacing.s4)
         } else {
+            let progress = TaskHelpers.projectProgress(for: project, from: allTasks)
+            let open = tasks
+                .filter { !$0.done }
+                .sorted(by: TaskHelpers.projectStepSortLess)
+            let current = open.first
+            let upcoming = Array(open.dropFirst())
+            let done = tasks
+                .filter(\.done)
+                .sorted(by: TaskHelpers.projectStepSortLess)
+
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    ForEach(tasks.sorted(by: Self.sortLess)) { task in
-                        TaskRow(
-                            task: task,
+                if let current {
+                    Section {
+                        CurrentProjectStepCard(
+                            task: current,
                             project: project,
-                            onToggle: { task.setDone($0) },
-                            onOpen: { editingTask = task },
-                            onEdit: { editingTask = task },
-                            onDelete: { requestDelete(task) }
+                            progress: progress,
+                            onToggle: { current.setDone($0) },
+                            onOpen: { editingTask = current }
                         )
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.bottom, Spacing.s4)
+                    } header: {
+                        SectionHeader(title: "Current step", count: 1)
                     }
-                } header: {
-                    SectionHeader(title: "Tasks", count: tasks.count)
+                }
+
+                if UserPrefs.useAIBreakdown {
+                    BreakdownGhostRow(
+                        title: "break down more",
+                        subtitle: "add another small batch when this plan needs help.",
+                        onTap: { breakingDown = true }
+                    )
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.bottom, Spacing.s4)
+                }
+
+                if !upcoming.isEmpty {
+                    Section {
+                        ForEach(upcoming) { task in
+                            taskRow(task)
+                        }
+                    } header: {
+                        SectionHeader(title: "Upcoming", count: upcoming.count)
+                    }
+                }
+
+                if !done.isEmpty {
+                    Section {
+                        ForEach(done) { task in
+                            taskRow(task)
+                        }
+                    } header: {
+                        SectionHeader(title: "Done", count: done.count)
+                    }
                 }
             }
         }
     }
 
-    /// Sort: open tasks first, then done tasks. Within each group:
-    ///   - Open: tasks with a dueDate sort by dueDate ASC (soonest first).
-    ///     Tasks without a dueDate sort AFTER dated ones, then by
-    ///     createdAt DESC so the most recent insertions bubble to the
-    ///     top. Breakdown stamps ordered tasks with sequential createdAts
-    ///     so this preserves the AI's intended order.
-    ///   - Done: by completedAt DESC.
-    private static func sortLess(_ a: PlootTask, _ b: PlootTask) -> Bool {
-        if a.done != b.done { return !a.done }
-        if a.done {
-            return (a.completedAt ?? .distantPast) > (b.completedAt ?? .distantPast)
-        }
-        switch (a.dueDate, b.dueDate) {
-        case let (.some(ad), .some(bd)):
-            if ad != bd { return ad < bd }
-            return a.createdAt > b.createdAt
-        case (.some, .none): return true
-        case (.none, .some): return false
-        case (.none, .none):
-            return a.createdAt > b.createdAt
-        }
+    private func taskRow(_ task: PlootTask) -> some View {
+        TaskRow(
+            task: task,
+            project: project,
+            onToggle: { task.setDone($0) },
+            onOpen: { editingTask = task },
+            onEdit: { editingTask = task },
+            onDelete: { requestDelete(task) }
+        )
+        .transition(.asymmetric(
+            insertion: .move(edge: .leading).combined(with: .opacity),
+            removal: .move(edge: .trailing).combined(with: .opacity)
+        ))
     }
 
     /// Route a task delete through the user's "Confirm before delete"
@@ -302,6 +328,87 @@ struct ProjectDetailScreen: View {
             }
             projectToDelete.softDelete()
             try? modelContext.save()
+        }
+    }
+}
+
+private struct CurrentProjectStepCard: View {
+    let task: PlootTask
+    let project: PlootProject
+    let progress: TaskHelpers.ProjectProgress
+    let onToggle: (Bool) -> Void
+    let onOpen: () -> Void
+
+    @Environment(\.plootPalette) private var palette
+    @State private var justCompleted = false
+
+    private var showAsDone: Bool { task.done || justCompleted }
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(alignment: .top, spacing: Spacing.s3) {
+                    PlootCheckbox(
+                        checked: showAsDone,
+                        priority: task.priority,
+                        size: 30,
+                        onToggle: handleToggle
+                    )
+                    .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("start here")
+                            .font(.jetBrainsMono(size: 11, weight: 700))
+                            .tracking(11 * 0.08)
+                            .textCase(.uppercase)
+                            .foregroundStyle(project.tileColor.dot(palette: palette))
+
+                        Text(task.title)
+                            .font(.fraunces(size: 23, weight: 500, opsz: 40, soft: 50))
+                            .tracking(-0.01 * 23)
+                            .foregroundStyle(palette.fg1)
+                            .strikethrough(showAsDone, color: palette.fg2)
+                            .opacity(showAsDone ? 0.5 : 1)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("\(progress.done) of \(progress.total) steps done. keep it small.")
+                            .font(.geist(size: 13, weight: 500))
+                            .foregroundStyle(palette.fg3)
+                            .contentTransition(.numericText(value: Double(progress.done)))
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(palette.bgSunken)
+                        Capsule()
+                            .fill(project.tileColor.dot(palette: palette))
+                            .frame(width: progress.fraction * geo.size.width)
+                    }
+                    .overlay(Capsule().strokeBorder(palette.borderInk, lineWidth: 1.5))
+                }
+                .frame(height: 7)
+            }
+            .cardStyle(radius: Radius.lg, padding: 16)
+        }
+        .buttonStyle(.plain)
+        .animation(Motion.spring, value: showAsDone)
+    }
+
+    private func handleToggle(_ value: Bool) {
+        if value {
+            justCompleted = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                withAnimation(Motion.spring) {
+                    onToggle(true)
+                }
+            }
+        } else {
+            withAnimation(Motion.spring) {
+                onToggle(false)
+            }
         }
     }
 }

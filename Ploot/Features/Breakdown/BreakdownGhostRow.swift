@@ -5,6 +5,8 @@ import SwiftUI
 /// as an offer rather than a committed task — tap to invoke the AI
 /// breakdown sheet.
 struct BreakdownGhostRow: View {
+    var title: String = "break this down for me"
+    var subtitle: String = "ai turns a project into a few clear steps."
     var onTap: () -> Void
 
     @Environment(\.plootPalette) private var palette
@@ -23,10 +25,10 @@ struct BreakdownGhostRow: View {
                     .scaleEffect(pressed ? 0.9 : 1)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("break this down for me")
+                    Text(title)
                         .font(.geist(size: 15, weight: 600))
                         .foregroundStyle(palette.fg1)
-                    Text("ai turns a project into a few clear steps.")
+                    Text(subtitle)
                         .font(.geist(size: 12, weight: 400))
                         .foregroundStyle(palette.fg3)
                 }

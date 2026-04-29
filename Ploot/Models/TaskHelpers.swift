@@ -443,6 +443,92 @@ enum TaskHelpers {
             .reduce(0, +)
     }
 
+    // MARK: - Project progress
+
+    struct ProjectProgress {
+        let open: Int
+        let done: Int
+
+        var total: Int { open + done }
+        var fraction: Double {
+            total == 0 ? 0 : Double(done) / Double(total)
+        }
+    }
+
+    struct ActiveProjectStep: Identifiable {
+        var id: UUID { task.id }
+        let project: PlootProject
+        let task: PlootTask
+        let progress: ProjectProgress
+    }
+
+    static func projectTasks(
+        for project: PlootProject,
+        from tasks: [PlootTask]
+    ) -> [PlootTask] {
+        tasks.filter { $0.isLive && $0.projectId == project.id }
+    }
+
+    static func projectProgress(
+        for project: PlootProject,
+        from tasks: [PlootTask]
+    ) -> ProjectProgress {
+        let scoped = projectTasks(for: project, from: tasks)
+        return ProjectProgress(
+            open: scoped.filter { !$0.done }.count,
+            done: scoped.filter(\.done).count
+        )
+    }
+
+    /// The next meaningful project step. Dated tasks win by soonest due
+    /// date; dateless tasks follow in created order. This mirrors the
+    /// project-detail ordering while giving every project a single obvious
+    /// next move for Today and the Projects list.
+    static func nextProjectStep(
+        for project: PlootProject,
+        from tasks: [PlootTask]
+    ) -> PlootTask? {
+        projectTasks(for: project, from: tasks)
+            .filter { !$0.done }
+            .sorted(by: projectStepSortLess)
+            .first
+    }
+
+    static func projectStepSortLess(_ a: PlootTask, _ b: PlootTask) -> Bool {
+        if a.done != b.done { return !a.done }
+        if a.done {
+            return (a.completedAt ?? .distantPast) > (b.completedAt ?? .distantPast)
+        }
+        switch (a.dueDate, b.dueDate) {
+        case let (.some(ad), .some(bd)):
+            if ad != bd { return ad < bd }
+            return a.createdAt > b.createdAt
+        case (.some, .none): return true
+        case (.none, .some): return false
+        case (.none, .none):
+            return a.createdAt > b.createdAt
+        }
+    }
+
+    static func activeProjectSteps(
+        from tasks: [PlootTask],
+        projects: [PlootProject]
+    ) -> [ActiveProjectStep] {
+        projects
+            .filter(\.isLive)
+            .compactMap { project in
+                guard let task = nextProjectStep(for: project, from: tasks) else { return nil }
+                return ActiveProjectStep(
+                    project: project,
+                    task: task,
+                    progress: projectProgress(for: project, from: tasks)
+                )
+            }
+            .sorted { lhs, rhs in
+                projectStepSortLess(lhs.task, rhs.task)
+            }
+    }
+
     // MARK: - Avatar initials
 
     /// Two-letter uppercase initials for an avatar tile. "Francis Chukwuma"

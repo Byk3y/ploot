@@ -40,7 +40,7 @@ struct TaskRow: View {
                         .strikethrough(showAsDone, color: palette.fg2)
                         .foregroundStyle(palette.fg1)
                         .opacity(showAsDone ? 0.5 : 1)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .multilineTextAlignment(.leading)
 
                     if hasMeta {
