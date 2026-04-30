@@ -23,7 +23,8 @@ enum BreakdownService {
         title: String,
         answers: [BreakdownAnswer] = [],
         bio: String? = nil,
-        projectContext: ProjectContext? = nil
+        projectContext: ProjectContext? = nil,
+        focusTask: FocusTask? = nil
     ) -> AsyncThrowingStream<BreakdownEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -33,6 +34,7 @@ enum BreakdownService {
                         answers: answers,
                         bio: bio,
                         projectContext: projectContext,
+                        focusTask: focusTask,
                         continuation: continuation
                     )
                 } catch is CancellationError {
@@ -53,11 +55,17 @@ enum BreakdownService {
         let avg_tasks_per_project: Int
     }
 
+    struct FocusTask: Encodable {
+        let title: String
+        let note: String?
+    }
+
     private static func run(
         title: String,
         answers: [BreakdownAnswer],
         bio: String?,
         projectContext: ProjectContext?,
+        focusTask: FocusTask?,
         continuation: AsyncThrowingStream<BreakdownEvent, Error>.Continuation
     ) async throws {
         let session = try await Supa.client.auth.session
@@ -80,6 +88,7 @@ enum BreakdownService {
             let max_questions: Int
             let bio: String?
             let project_context: ProjectContext?
+            let focus_task: FocusTask?
         }
 
         request.httpBody = try JSONEncoder().encode(Body(
@@ -87,7 +96,8 @@ enum BreakdownService {
             answers: answers,
             max_questions: UserPrefs.breakdownQuestions,
             bio: bio,
-            project_context: projectContext
+            project_context: projectContext,
+            focus_task: focusTask
         ))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)

@@ -21,6 +21,7 @@ struct TaskDTO: Codable, Hashable {
     var overdue: Bool
     var repeats: String?
     var remind_me: Bool?
+    var breakdown_depth: Int?
     var created_at: Date
     var completed_at: Date?
     var updated_at: Date?
@@ -43,6 +44,7 @@ struct TaskDTO: Codable, Hashable {
         self.overdue = task.overdue
         self.repeats = task.repeats
         self.remind_me = task.remindMe
+        self.breakdown_depth = task.breakdownDepth
         self.created_at = task.createdAt
         self.completed_at = task.completedAt
         self.updated_at = task.updatedAt ?? Date()
@@ -65,6 +67,7 @@ struct TaskDTO: Codable, Hashable {
         task.overdue = overdue
         task.repeats = repeats
         task.remindMe = remind_me
+        task.breakdownDepth = breakdown_depth
         task.createdAt = created_at
         task.completedAt = completed_at
         task.updatedAt = updated_at
@@ -88,7 +91,8 @@ struct TaskDTO: Codable, Hashable {
             section: TaskSection(rawValue: section) ?? .today,
             overdue: overdue,
             repeats: repeats,
-            remindMe: remind_me ?? false
+            remindMe: remind_me ?? false,
+            breakdownDepth: breakdown_depth
         )
         t.id = id
         t.createdAt = created_at

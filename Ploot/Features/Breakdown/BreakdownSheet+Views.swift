@@ -152,7 +152,9 @@ extension BreakdownSheet {
 
     var reviewFooter: some View {
         VStack(spacing: Spacing.s3) {
-            timelinePicker
+            if focusTask == nil {
+                timelinePicker
+            }
 
             // Task count
             HStack(spacing: 6) {
@@ -172,7 +174,7 @@ extension BreakdownSheet {
             Button {
                 commitAllTasks()
             } label: {
-                Text("Start with step 1")
+                Text(focusTask == nil ? "Start with step 1" : "Add smaller steps")
                     .font(.geist(size: 16, weight: 600))
                     .foregroundStyle(palette.onPrimary)
                     .frame(maxWidth: .infinity)
@@ -210,7 +212,11 @@ extension BreakdownSheet {
     /// Post-stream pacing picker. Default is `.drip` (no change to the
     /// existing one-at-a-time behavior). Picking anything else re-stamps
     /// every streamed task's dueDate via `applyTimeline(...)`.
+    @ViewBuilder
     var timelinePicker: some View {
+        if focusTask != nil {
+            EmptyView()
+        } else {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: 6) {
                 Text("📅").font(.system(size: 13))
@@ -230,6 +236,7 @@ extension BreakdownSheet {
             }
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
+        }
     }
 
     private var timelineModeOptions: [TimelineMode] {

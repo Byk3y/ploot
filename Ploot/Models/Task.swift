@@ -144,6 +144,9 @@ final class PlootTask {
     /// `dueDate`. Optional so adding this column is a clean lightweight
     /// migration — existing rows read as nil (treated as false).
     var remindMe: Bool?
+    /// Number of times this project step has been split via "Make smaller".
+    /// Optional for lightweight migration; nil means legacy/top-level depth 0.
+    var breakdownDepth: Int?
     var createdAt: Date
     var completedAt: Date?
     /// Bumped on every mutation — basis for last-write-wins conflict
@@ -171,7 +174,8 @@ final class PlootTask {
         section: TaskSection = .today,
         overdue: Bool = false,
         repeats: String? = nil,
-        remindMe: Bool = false
+        remindMe: Bool = false,
+        breakdownDepth: Int? = nil
     ) {
         self.id = UUID()
         self.title = title
@@ -188,10 +192,15 @@ final class PlootTask {
         self.overdue = overdue
         self.repeats = repeats
         self.remindMe = remindMe
+        self.breakdownDepth = breakdownDepth
         let now = Date()
         self.createdAt = now
         self.completedAt = done ? now : nil
         self.updatedAt = now
+    }
+
+    var effectiveBreakdownDepth: Int {
+        max(0, breakdownDepth ?? 0)
     }
 
     /// Apply a done/undone toggle with the side-effects needed for UI to

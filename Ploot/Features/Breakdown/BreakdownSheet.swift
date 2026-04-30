@@ -18,6 +18,7 @@ import SwiftData
 /// `private`) so the cross-file extensions can read/write it.
 struct BreakdownSheet: View {
     let project: PlootProject
+    var focusTask: PlootTask? = nil
     var onClose: () -> Void
 
     @Environment(\.plootPalette) var palette
@@ -170,9 +171,9 @@ struct BreakdownSheet: View {
 
     private var topBarTitle: String {
         switch phase {
-        case .reviewing: return "Your plan"
+        case .reviewing: return focusTask == nil ? "Your plan" : "Smaller steps"
         case .finished: return "All set"
-        default: return "Breaking down"
+        default: return focusTask == nil ? "Breaking down" : "Making it smaller"
         }
     }
 
@@ -259,14 +260,14 @@ struct BreakdownSheet: View {
         answers = []
         pendingQuestion = nil
         withAnimation(Motion.spring) { phase = .thinking }
-        runStream(title: project.name, answers: [])
+        runStream(answers: [])
     }
 
     private func retryStream() {
         streamedTasks = []
         pendingQuestion = nil
         withAnimation(Motion.spring) { phase = .thinking }
-        runStream(title: project.name, answers: answers)
+        runStream(answers: answers)
     }
 
     /// Re-runs the breakdown stream from scratch with the same answers.
@@ -277,10 +278,10 @@ struct BreakdownSheet: View {
         editingTaskIndex = nil
         baseCreatedAt = Date()
         withAnimation(Motion.spring) { phase = .thinking }
-        runStream(title: project.name, answers: answers)
+        runStream(answers: answers)
     }
 
-    private func runStream(title: String, answers: [BreakdownAnswer]) {
+    private func runStream(answers: [BreakdownAnswer]) {
         streamTask?.cancel()
 
         // Gather context from the sheet's modelContext (available via
@@ -306,13 +307,21 @@ struct BreakdownSheet: View {
             )
         }()
 
+        let focusContext = focusTask.map {
+            BreakdownService.FocusTask(
+                title: $0.title,
+                note: $0.note
+            )
+        }
+
         streamTask = Task { @MainActor in
             do {
                 for try await event in BreakdownService.stream(
-                    title: title,
+                    title: project.name,
                     answers: answers,
                     bio: bio,
-                    projectContext: projectContext
+                    projectContext: projectContext,
+                    focusTask: focusContext
                 ) {
                     await handleEvent(event)
                 }
@@ -403,7 +412,7 @@ struct BreakdownSheet: View {
                     // pref of "this week" actually spreads the tasks
                     // without requiring a chip tap. .drip is a no-op
                     // restore so it's safe to always call.
-                    if timelineMode != .drip {
+                    if focusTask == nil && timelineMode != .drip {
                         applyTimeline(timelineMode)
                     }
                 }
@@ -424,7 +433,7 @@ struct BreakdownSheet: View {
             pendingQuestion = nil
             phase = .thinking
         }
-        runStream(title: project.name, answers: newAnswers)
+        runStream(answers: newAnswers)
     }
 
     // MARK: - Helpers

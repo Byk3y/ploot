@@ -22,18 +22,22 @@ extension BreakdownSheet {
     /// first) and task N is the oldest (appears last).
     @discardableResult
     func insertTask(title: String, order: Int) -> UUID {
-        let isFirst = order == 0
+        let isFocusedSplit = focusTask != nil
+        let isFirst = !isFocusedSplit && order == 0
         let section: TaskSection = isFirst ? .today : .later
         let dueDate: Date? = isFirst ? Self.firstTaskDueDate() : nil
+        let breakdownDepth = focusTask.map { $0.effectiveBreakdownDepth + 1 } ?? 0
         let task = PlootTask(
             title: title,
             dueDate: dueDate,
             projectId: project.id,
             section: section,
-            remindMe: isFirst
+            remindMe: isFirst,
+            breakdownDepth: breakdownDepth
         )
         // Stamp createdAt so DESC sort preserves AI task order.
-        task.createdAt = baseCreatedAt.addingTimeInterval(-Double(order) * 0.001)
+        let insertionBase = focusTask?.createdAt.addingTimeInterval(-0.001) ?? baseCreatedAt
+        task.createdAt = insertionBase.addingTimeInterval(-Double(order) * 0.001)
         task.updatedAt = task.createdAt
         modelContext.insert(task)
         try? modelContext.save()
@@ -71,7 +75,7 @@ extension BreakdownSheet {
 
         // Apply timeline after commit so tasks have real SwiftData rows
         // that applyTimeline can fetch and re-stamp.
-        if timelineMode != .drip {
+        if focusTask == nil && timelineMode != .drip {
             applyTimeline(timelineMode)
         }
     }

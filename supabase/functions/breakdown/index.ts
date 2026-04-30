@@ -196,6 +196,11 @@ type ProjectContext = {
   avg_tasks_per_project: number
 }
 
+type FocusTask = {
+  title: string
+  note: string | null
+}
+
 type ModelResponse =
   | { kind: "question"; question: { text: string; choices: string[]; allowCustom: boolean } }
   | { kind: "tasks"; tasks: Array<{ title: string }> }
@@ -223,7 +228,15 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "unauthorized", reason: "invalid_jwt" }, 401)
   }
 
-  let body: { title?: unknown; answers?: unknown; locale?: unknown; max_questions?: unknown; bio?: unknown; project_context?: unknown }
+  let body: {
+    title?: unknown
+    answers?: unknown
+    locale?: unknown
+    max_questions?: unknown
+    bio?: unknown
+    project_context?: unknown
+    focus_task?: unknown
+  }
   try {
     body = await req.json()
   } catch {
@@ -266,6 +279,18 @@ Deno.serve(async (req) => {
         : [],
       avg_tasks_per_project: typeof obj.avg_tasks_per_project === "number" ? obj.avg_tasks_per_project : 0,
     }
+  })()
+
+  const focusTask: FocusTask | null = (() => {
+    const raw = body.focus_task
+    if (!raw || typeof raw !== "object") return null
+    const obj = raw as Record<string, unknown>
+    const taskTitle = typeof obj.title === "string" ? obj.title.trim().slice(0, 200) : ""
+    if (!taskTitle) return null
+    const note = typeof obj.note === "string" && obj.note.trim()
+      ? obj.note.trim().slice(0, 500)
+      : null
+    return { title: taskTitle, note }
   })()
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -318,8 +343,11 @@ Deno.serve(async (req) => {
   const questionRule = maxQuestions === 0
     ? `\n\n## Question budget\nThe user has disabled clarifying questions. NEVER ask a question — emit tasks (or hint/split/refused) on the first turn.`
     : `\n\n## Question budget\nMaximum ${maxQuestions} question${maxQuestions === 1 ? "" : "s"} total across the conversation (count the prior answers). After ${maxQuestions} prior answer${maxQuestions === 1 ? "" : "s"}, you MUST generate tasks.`
-  const systemPrompt = SYSTEM_PROMPT_STATIC + questionRule + "\n" + preamble
-  const userMessage = buildUserMessage(title, answers)
+  const focusRule = focusTask
+    ? `\n\n## Focused step mode\nThe user is not asking for a fresh project plan. They tapped "Make smaller" on one current step inside the project. Break ONLY that focused step into 3-5 smaller concrete actions that fit inside the existing project. Do not repeat the focused step as a task. Do not regenerate the whole project. Do not return kind "hint" just because the focused step is itself a task. Use kind "question" only if absolutely necessary.`
+    : ""
+  const systemPrompt = SYSTEM_PROMPT_STATIC + questionRule + focusRule + "\n" + preamble
+  const userMessage = buildUserMessage(title, answers, focusTask)
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -564,8 +592,12 @@ function chronotypeLabel(c: string | null): string | null {
   }
 }
 
-function buildUserMessage(title: string, answers: Answer[]): string {
+function buildUserMessage(title: string, answers: Answer[], focusTask: FocusTask | null): string {
   const lines = [`Project title: ${title}`]
+  if (focusTask) {
+    lines.push("", `Focused step to make smaller: ${focusTask.title}`)
+    if (focusTask.note) lines.push(`Focused step note: ${focusTask.note}`)
+  }
   if (answers.length > 0) {
     lines.push("", "Prior answers:")
     for (const a of answers) lines.push(`- Q: ${a.q}`, `  A: ${a.a}`)

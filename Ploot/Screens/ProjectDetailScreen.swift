@@ -17,6 +17,7 @@ struct ProjectDetailScreen: View {
     @State private var editingTask: PlootTask? = nil
     @State private var deletingTask: PlootTask? = nil
     @State private var breakingDown: Bool = false
+    @State private var breakdownFocusTask: PlootTask? = nil
 
     @Environment(\.plootPalette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -31,7 +32,10 @@ struct ProjectDetailScreen: View {
             trailing: {
                 HStack(spacing: Spacing.s2) {
                     if UserPrefs.useAIBreakdown {
-                        HeaderButton(systemImage: "sparkles") { breakingDown = true }
+                        HeaderButton(systemImage: "sparkles") {
+                            breakdownFocusTask = nil
+                            breakingDown = true
+                        }
                     }
                     HeaderButton(systemImage: "plus") { addingTask = true }
                     moreMenu
@@ -59,7 +63,14 @@ struct ProjectDetailScreen: View {
             )
         }
         .sheet(isPresented: $breakingDown) {
-            BreakdownSheet(project: project, onClose: { breakingDown = false })
+            BreakdownSheet(
+                project: project,
+                focusTask: breakdownFocusTask,
+                onClose: {
+                    breakingDown = false
+                    breakdownFocusTask = nil
+                }
+            )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(28)
@@ -208,7 +219,20 @@ struct ProjectDetailScreen: View {
                             onOpen: { editingTask = current }
                         )
                         .padding(.horizontal, Spacing.s4)
-                        .padding(.bottom, Spacing.s4)
+                        .padding(.bottom, UserPrefs.useAIBreakdown ? Spacing.s2 : Spacing.s4)
+
+                        if UserPrefs.useAIBreakdown {
+                            ProjectStepActionBar(
+                                canBreakDown: current.effectiveBreakdownDepth == 0,
+                                onBreakDown: {
+                                    breakdownFocusTask = current
+                                    breakingDown = true
+                                },
+                                onAddStep: { addingTask = true }
+                            )
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.bottom, Spacing.s4)
+                        }
                     } header: {
                         SectionHeader(title: "Current step", count: 1)
                     }
@@ -284,6 +308,7 @@ struct ProjectDetailScreen: View {
             }
             if UserPrefs.useAIBreakdown {
                 Button {
+                    breakdownFocusTask = nil
                     breakingDown = true
                 } label: {
                     Label("Break down more", systemImage: "sparkles")
@@ -410,6 +435,30 @@ private struct CurrentProjectStepCard: View {
             withAnimation(Motion.spring) {
                 onToggle(false)
             }
+        }
+    }
+}
+
+private struct ProjectStepActionBar: View {
+    let canBreakDown: Bool
+    let onBreakDown: () -> Void
+    let onAddStep: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            if canBreakDown {
+                Button(action: onBreakDown) {
+                    Label("Make smaller", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ploot(.secondary, size: .sm, fullWidth: true))
+            }
+
+            Button(action: onAddStep) {
+                Label("Add step", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.ploot(.ghost, size: .sm, fullWidth: true))
         }
     }
 }
