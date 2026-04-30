@@ -75,9 +75,8 @@ const BREAKDOWN_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["emoji", "title"],
+              required: ["title"],
               properties: {
-                emoji: { type: "string" },
                 title: { type: "string" },
               },
             },
@@ -162,8 +161,6 @@ When in doubt, err on FEWER tasks. An 8-task list fills the user's whole week; a
 - Completable in under 2 hours of focused work.
 - Lowercase casual voice. Contractions. Period, not exclamation. Parentheticals for warmth.
 - Acronyms: lowercase ("diy", "ceo", "api", "ui", "mvp"). Never "DIY", "CEO", etc.
-- One emoji per task, chosen for the action. Allowed set only:
-  📝 🛒 📞 📐 💻 🎨 📚 🎧 🎙️ 🎛️ 📡 🚀 🔧 🔨 📦 📧 📄 ✍️ 🖼️ 🧪 🧹 🧊 🍳 🌱 🚗 ✈️ 🏠 🏋️ 💳 💰 🎁 🎂 🎉 💼 🏡 📅 ⏰ 🔍 ⚙️ ♻️
 - Order by dependency or natural sequence.
 - Match the language of the title. Spanish title → Spanish tasks.
 
@@ -189,12 +186,19 @@ type Profile = {
   chronotype: string | null
   daily_goal: number | null
   reminder_style: string | null
+  bio: string | null
   onboarding_answers: Record<string, unknown> | null
+}
+
+type ProjectContext = {
+  completed_projects: string[]
+  active_projects: string[]
+  avg_tasks_per_project: number
 }
 
 type ModelResponse =
   | { kind: "question"; question: { text: string; choices: string[]; allowCustom: boolean } }
-  | { kind: "tasks"; tasks: Array<{ emoji: string; title: string }> }
+  | { kind: "tasks"; tasks: Array<{ title: string }> }
   | { kind: "hint" }
   | { kind: "split"; split: string[] }
   | { kind: "refused"; refusedReason: string }
@@ -219,7 +223,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "unauthorized", reason: "invalid_jwt" }, 401)
   }
 
-  let body: { title?: unknown; answers?: unknown; locale?: unknown; max_questions?: unknown }
+  let body: { title?: unknown; answers?: unknown; locale?: unknown; max_questions?: unknown; bio?: unknown; project_context?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -246,6 +250,24 @@ Deno.serve(async (req) => {
     if (q && ans) answers.push({ q: q.slice(0, 200), a: ans.slice(0, 200) })
   }
 
+  // Client-supplied bio and project context. These enrich the system
+  // prompt so the AI can tailor task count and phrasing.
+  const clientBio = typeof body.bio === "string" ? body.bio.trim().slice(0, 500) : null
+  const clientProjectCtx: ProjectContext | null = (() => {
+    const pc = body.project_context
+    if (!pc || typeof pc !== "object") return null
+    const obj = pc as Record<string, unknown>
+    return {
+      completed_projects: Array.isArray(obj.completed_projects)
+        ? (obj.completed_projects as unknown[]).filter((s) => typeof s === "string").slice(0, 10) as string[]
+        : [],
+      active_projects: Array.isArray(obj.active_projects)
+        ? (obj.active_projects as unknown[]).filter((s) => typeof s === "string").slice(0, 10) as string[]
+        : [],
+      avg_tasks_per_project: typeof obj.avg_tasks_per_project === "number" ? obj.avg_tasks_per_project : 0,
+    }
+  })()
+
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   })
@@ -258,7 +280,7 @@ Deno.serve(async (req) => {
     admin.from("subscription_status").select("status").eq("user_id", userId).maybeSingle(),
     admin
       .from("profiles")
-      .select("primary_role, chronotype, daily_goal, reminder_style, onboarding_answers")
+      .select("primary_role, chronotype, daily_goal, reminder_style, bio, onboarding_answers")
       .eq("id", userId)
       .maybeSingle(),
   ])
@@ -289,7 +311,7 @@ Deno.serve(async (req) => {
   }
 
   const profile = (profileResult.data as Profile | null) ?? null
-  const preamble = buildPreamble(profile)
+  const preamble = buildPreamble(profile, clientBio, clientProjectCtx)
   // The user-pref question cap rewrites the question budget in the
   // system prompt. `maxQuestions === 0` flips the prompt to "never
   // ask, always emit tasks" so the prefill is unambiguous.
@@ -339,7 +361,7 @@ Deno.serve(async (req) => {
         case "tasks": {
           const tasks = response.tasks.slice(0, 8)
           for (let i = 0; i < tasks.length; i++) {
-            send("task", { order: i, emoji: tasks[i].emoji, title: tasks[i].title })
+            send("task", { order: i, title: tasks[i].title })
             if (i < tasks.length - 1) await sleep(TASK_EMIT_GAP_MS)
           }
           send("done", { count: tasks.length })
@@ -454,13 +476,12 @@ function validateModelResponse(v: unknown): ModelResponse {
 
   if (kind === "tasks") {
     const raw = Array.isArray(obj.tasks) ? obj.tasks : []
-    const tasks: Array<{ emoji: string; title: string }> = []
+    const tasks: Array<{ title: string }> = []
     for (const t of raw) {
       if (!t || typeof t !== "object") continue
       const o = t as Record<string, unknown>
-      const emoji = typeof o.emoji === "string" ? o.emoji : ""
       const title = typeof o.title === "string" ? o.title : ""
-      if (emoji && title) tasks.push({ emoji, title: title.slice(0, 120) })
+      if (title) tasks.push({ title: title.slice(0, 120) })
     }
     if (tasks.length === 0) throw new Error("no tasks")
     return { kind: "tasks", tasks }
@@ -486,24 +507,50 @@ function validateModelResponse(v: unknown): ModelResponse {
 
 // ---------- Helpers ----------
 
-function buildPreamble(profile: Profile | null): string {
+function buildPreamble(
+  profile: Profile | null,
+  clientBio: string | null,
+  projectCtx: ProjectContext | null,
+): string {
   const today = new Date().toISOString().slice(0, 10)
   const lines: string[] = [`Today's date: ${today}`]
-  if (!profile) return lines.join("\n")
-  if (profile.primary_role) lines.push(`Role: ${profile.primary_role}`)
-  const answers = profile.onboarding_answers as Record<string, unknown> | null
-  if (answers) {
-    if (typeof answers.whatBringsYou === "string" && answers.whatBringsYou.trim()) {
-      lines.push(`Motivation: "${String(answers.whatBringsYou).slice(0, 200)}"`)
+  if (!profile && !clientBio && !projectCtx) return lines.join("\n")
+
+  // Bio: prefer client-sent (most recent), fall back to DB-stored.
+  const bio = clientBio || profile?.bio || null
+  if (bio) lines.push(`About the user: "${bio.slice(0, 500)}"`)
+
+  if (profile) {
+    if (profile.primary_role) lines.push(`Role: ${profile.primary_role}`)
+    const answers = profile.onboarding_answers as Record<string, unknown> | null
+    if (answers) {
+      if (typeof answers.whatBringsYou === "string" && answers.whatBringsYou.trim()) {
+        lines.push(`Motivation: "${String(answers.whatBringsYou).slice(0, 200)}"`)
+      }
+      if (typeof answers.gettingInTheWay === "string" && answers.gettingInTheWay.trim()) {
+        lines.push(`Blockers: "${String(answers.gettingInTheWay).slice(0, 200)}"`)
+      }
     }
-    if (typeof answers.gettingInTheWay === "string" && answers.gettingInTheWay.trim()) {
-      lines.push(`Blockers: "${String(answers.gettingInTheWay).slice(0, 200)}"`)
+    if (profile.reminder_style) lines.push(`Tone preference: ${profile.reminder_style}`)
+    if (profile.daily_goal) lines.push(`Daily task goal: ${profile.daily_goal} tasks/day`)
+    const peak = chronotypeLabel(profile.chronotype)
+    if (peak) lines.push(`Peak energy: ${peak}`)
+  }
+
+  // Project history: helps the AI calibrate task count and avoid
+  // repeating themes from recent projects.
+  if (projectCtx) {
+    if (projectCtx.completed_projects.length > 0) {
+      lines.push(`Recently completed projects: ${projectCtx.completed_projects.join(", ")}`)
+    }
+    if (projectCtx.active_projects.length > 0) {
+      lines.push(`Currently active projects: ${projectCtx.active_projects.join(", ")}`)
+    }
+    if (projectCtx.avg_tasks_per_project > 0) {
+      lines.push(`Avg tasks per project: ${projectCtx.avg_tasks_per_project}`)
     }
   }
-  if (profile.reminder_style) lines.push(`Tone preference: ${profile.reminder_style}`)
-  if (profile.daily_goal) lines.push(`Daily task goal: ${profile.daily_goal} tasks/day`)
-  const peak = chronotypeLabel(profile.chronotype)
-  if (peak) lines.push(`Peak energy: ${peak}`)
+
   return lines.join("\n")
 }
 

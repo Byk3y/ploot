@@ -6,8 +6,11 @@ import SwiftData
 /// interrupt the stream as a card, and terminal states (hint/split/refused
 /// /error/rate-limit) collapse to a friendly one-screen surface.
 ///
-/// Tasks are inserted into SwiftData as they arrive so the user sees them
-/// land in the project list behind the sheet too — no "commit" step.
+/// When `reviewMode` is true (Settings → Review plan before starting),
+/// tasks stream into a local buffer — nothing touches SwiftData until
+/// the user taps "Start with step 1". This lets them reorder, rename,
+/// and remove steps before committing. When false, the legacy behavior
+/// of instant-insert is preserved.
 ///
 /// Sub-views (header lines, streaming list, terminal cards) live in
 /// BreakdownSheet+Views.swift; SwiftData inserts and removals live in
@@ -37,12 +40,20 @@ struct BreakdownSheet: View {
     /// batch shares a base timestamp — insertion order then becomes the
     /// only distinguishing factor in createdAt.
     @State var baseCreatedAt: Date = Date()
+    /// When true, tasks stream into a local buffer and SwiftData is
+    /// untouched until the user explicitly commits via "Start with step 1".
+    @State var reviewMode: Bool = UserPrefs.reviewBeforeCommit
+    /// Index of the task currently being inline-renamed, if any.
+    @State var editingTaskIndex: Int? = nil
+    /// Temporary text buffer for inline rename.
+    @State var editingText: String = ""
 
     enum Phase {
         case thinking
         case asking
         case streamingTasks
-        case finished
+        case reviewing   // review mode: tasks buffered, awaiting commit
+        case finished     // legacy mode: tasks already inserted
         case hint
         case split(projects: [String])
         case refused(reason: String)
@@ -59,30 +70,62 @@ struct BreakdownSheet: View {
 
     struct StreamedTask: Identifiable, Equatable {
         let id = UUID()
-        let order: Int
-        let emoji: String
-        let title: String
-        /// PlootTask.id for the row we inserted into SwiftData. Kept so the
-        /// swipe-to-remove action can soft-delete the real row, not just
-        /// hide it from the sheet.
-        let taskId: UUID
+        var order: Int
+        var title: String
+        /// PlootTask.id for the row we inserted into SwiftData. Kept so
+        /// the swipe-to-remove action can soft-delete the real row, not
+        /// just hide it from the sheet. nil in review mode (no row yet).
+        var taskId: UUID?
     }
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    projectLine
-                    if !answers.isEmpty {
-                        contextPills
+            
+            if case .reviewing = phase {
+                List {
+                    Section {
+                        if !answers.isEmpty {
+                            contextPills
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .padding(.bottom, Spacing.s2)
+                        }
+                        
+                        reviewableList
+                        
+                        reviewFooter
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .padding(.top, Spacing.s3)
+                            .padding(.bottom, 40)
+                    } header: {
+                        projectLine
+                            .padding(.bottom, Spacing.s4)
+                            .padding(.top, Spacing.s3)
+                            .textCase(nil)
+                            .listRowInsets(EdgeInsets())
                     }
-                    content
-                    Color.clear.frame(height: 40)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.s4) {
+                        projectLine
+                        if !answers.isEmpty {
+                            contextPills
+                        }
+                        content
+                        Color.clear.frame(height: 40)
+                    }
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .background(palette.bg.ignoresSafeArea())
@@ -98,26 +141,39 @@ struct BreakdownSheet: View {
 
     private var topBar: some View {
         HStack {
-            Button("Close", action: closeSheet)
+            Button(phase.isWorking ? "Cancel" : "Close", action: closeSheet)
                 .font(.geist(size: 15, weight: 500))
                 .foregroundStyle(palette.fg2)
 
             Spacer()
 
-            Text("Breaking down")
+            Text(topBarTitle)
                 .font(.fraunces(size: 20, weight: 600, opsz: 20, soft: 80))
                 .foregroundStyle(palette.fg1)
 
             Spacer()
 
-            Button("Done", action: closeSheet)
-                .buttonStyle(.ploot(.primary, size: .sm))
-                .scaleEffect(donePulse ? 1.12 : 1)
-                .opacity(phase.canFinish ? 1 : 0.35)
-                .disabled(!phase.canFinish)
+            if case .reviewing = phase {
+                // In review mode the commit button is inline, not the top bar.
+                Color.clear.frame(width: 60, height: 1)
+            } else {
+                Button("Done", action: closeSheet)
+                    .buttonStyle(.ploot(.primary, size: .sm))
+                    .scaleEffect(donePulse ? 1.12 : 1)
+                    .opacity(phase.canFinish ? 1 : 0.35)
+                    .disabled(!phase.canFinish)
+            }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
+    }
+
+    private var topBarTitle: String {
+        switch phase {
+        case .reviewing: return "Your plan"
+        case .finished: return "All set"
+        default: return "Breaking down"
+        }
     }
 
     // MARK: - Content switch
@@ -138,7 +194,7 @@ struct BreakdownSheet: View {
                 )
             }
 
-        case .streamingTasks, .finished:
+        case .streamingTasks, .finished, .reviewing:
             streamedTaskList
 
         case .hint:
@@ -213,11 +269,51 @@ struct BreakdownSheet: View {
         runStream(title: project.name, answers: answers)
     }
 
+    /// Re-runs the breakdown stream from scratch with the same answers.
+    /// Clears all buffered tasks so the user sees a fresh plan.
+    func redoPlan() {
+        streamedTasks = []
+        completedCount = 0
+        editingTaskIndex = nil
+        baseCreatedAt = Date()
+        withAnimation(Motion.spring) { phase = .thinking }
+        runStream(title: project.name, answers: answers)
+    }
+
     private func runStream(title: String, answers: [BreakdownAnswer]) {
         streamTask?.cancel()
+
+        // Gather context from the sheet's modelContext (available via
+        // @Environment). This is lightweight — just project names and a
+        // count — so it adds no meaningful latency.
+        let bio: String? = {
+            let b = UserPrefs.bio
+            return b.isEmpty ? nil : b
+        }()
+
+        let projectContext: BreakdownService.ProjectContext? = {
+            let descriptor = FetchDescriptor<PlootProject>()
+            guard let projects = try? modelContext.fetch(descriptor) else { return nil }
+            let liveProjects = projects.filter(\.isLive)
+            let names = liveProjects.prefix(10).map { $0.name }
+            let taskDescriptor = FetchDescriptor<PlootTask>()
+            let taskCount = (try? modelContext.fetchCount(taskDescriptor)) ?? 0
+            let projectCount = max(1, liveProjects.count)
+            return BreakdownService.ProjectContext(
+                completed_projects: [],  // not tracked at project level yet
+                active_projects: Array(names),
+                avg_tasks_per_project: taskCount / projectCount
+            )
+        }()
+
         streamTask = Task { @MainActor in
             do {
-                for try await event in BreakdownService.stream(title: title, answers: answers) {
+                for try await event in BreakdownService.stream(
+                    title: title,
+                    answers: answers,
+                    bio: bio,
+                    projectContext: projectContext
+                ) {
                     await handleEvent(event)
                 }
             } catch BreakdownError.rateLimited(let resetAt, let used, let limit) {
@@ -254,7 +350,7 @@ struct BreakdownSheet: View {
                 phase = .asking
             }
 
-        case .task(let order, let emoji, let title):
+        case .task(let order, let title):
             if case .thinking = phase {
                 withAnimation(Motion.spring) { phase = .streamingTasks }
             } else if case .asking = phase {
@@ -263,15 +359,26 @@ struct BreakdownSheet: View {
                     phase = .streamingTasks
                 }
             }
-            let taskId = insertTask(emoji: emoji, title: title, order: order)
-            let streamed = StreamedTask(
-                order: order,
-                emoji: emoji,
-                title: title,
-                taskId: taskId
-            )
-            withAnimation(Motion.spring) {
-                streamedTasks.append(streamed)
+            if reviewMode {
+                // Buffer only — no SwiftData insert yet.
+                let streamed = StreamedTask(
+                    order: order,
+                    title: title,
+                    taskId: nil
+                )
+                withAnimation(Motion.spring) {
+                    streamedTasks.append(streamed)
+                }
+            } else {
+                let taskId = insertTask(title: title, order: order)
+                let streamed = StreamedTask(
+                    order: order,
+                    title: title,
+                    taskId: taskId
+                )
+                withAnimation(Motion.spring) {
+                    streamedTasks.append(streamed)
+                }
             }
 
         case .hint:
@@ -287,13 +394,18 @@ struct BreakdownSheet: View {
             completedCount = count
             if count > 0 {
                 finishedHaptic &+= 1
-                withAnimation(Motion.spring) { phase = .finished }
-                // Apply the user's default timeline immediately so a
-                // pref of "this week" actually spreads the tasks
-                // without requiring a chip tap. .drip is a no-op
-                // restore so it's safe to always call.
-                if timelineMode != .drip {
-                    applyTimeline(timelineMode)
+                if reviewMode {
+                    // Go to review — user must commit before tasks land in SwiftData.
+                    withAnimation(Motion.spring) { phase = .reviewing }
+                } else {
+                    withAnimation(Motion.spring) { phase = .finished }
+                    // Apply the user's default timeline immediately so a
+                    // pref of "this week" actually spreads the tasks
+                    // without requiring a chip tap. .drip is a no-op
+                    // restore so it's safe to always call.
+                    if timelineMode != .drip {
+                        applyTimeline(timelineMode)
+                    }
                 }
                 pulseDoneButton()
             }
@@ -351,10 +463,17 @@ struct BreakdownSheet: View {
 }
 
 private extension BreakdownSheet.Phase {
+    var isWorking: Bool {
+        switch self {
+        case .thinking, .asking, .streamingTasks: return true
+        default: return false
+        }
+    }
+
     var canFinish: Bool {
         switch self {
         case .thinking, .asking: return false
-        case .streamingTasks, .finished, .hint, .split, .refused, .error, .rateLimited:
+        case .streamingTasks, .finished, .reviewing, .hint, .split, .refused, .error, .rateLimited:
             return true
         }
     }

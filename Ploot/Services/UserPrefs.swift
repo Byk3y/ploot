@@ -38,6 +38,8 @@ enum UserPrefs {
         static let useAIBreakdown = "ploot.useAIBreakdown" // Bool
         static let defaultTimelineMode = "ploot.defaultTimelineMode" // "drip" | "thisWeekend" | "thisWeek" | "nextTwoWeeks"
         static let breakdownQuestions = "ploot.breakdownQuestions" // Int 0-5
+        static let reviewBeforeCommit = "ploot.reviewBeforeCommit" // Bool
+        static let bio = "ploot.bio" // String — free-text user context for AI
 
         // Settings — Today
         static let showOverdueSeparately = "ploot.showOverdueSeparately" // Bool
@@ -139,6 +141,11 @@ enum UserPrefs {
     static var useAIBreakdown: Bool { bool(Key.useAIBreakdown, default: true) }
     static var defaultTimelineMode: String { string(Key.defaultTimelineMode, default: "drip") }
     static var breakdownQuestions: Int { int(Key.breakdownQuestions, default: 3) }
+    // Default true — new users get the review surface; existing users
+    // upgrading will also see it, which is fine: the first time they
+    // encounter the "Start with step 1" button they'll understand.
+    static var reviewBeforeCommit: Bool { bool(Key.reviewBeforeCommit, default: true) }
+    static var bio: String { string(Key.bio, default: "") }
 
     // Today
     static var showOverdueSeparately: Bool { bool(Key.showOverdueSeparately, default: true) }
@@ -224,6 +231,7 @@ enum UserPrefs {
             Key.hapticsEnabled,
             Key.defaultProjectId, Key.defaultSchedule,
             Key.useAIBreakdown, Key.defaultTimelineMode, Key.breakdownQuestions,
+            Key.reviewBeforeCommit, Key.bio,
             Key.showOverdueSeparately, Key.autoRollIncomplete, Key.sortOrder,
             Key.autoArchiveDays, Key.confirmBeforeDelete,
             Key.weekStartsOn

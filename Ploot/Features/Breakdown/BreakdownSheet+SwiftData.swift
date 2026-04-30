@@ -21,13 +21,12 @@ extension BreakdownSheet {
     /// each task by `order × 1ms` so task 0 is the newest (appears
     /// first) and task N is the oldest (appears last).
     @discardableResult
-    func insertTask(emoji: String, title: String, order: Int) -> UUID {
-        let composed = "\(emoji) \(title)"
+    func insertTask(title: String, order: Int) -> UUID {
         let isFirst = order == 0
         let section: TaskSection = isFirst ? .today : .later
         let dueDate: Date? = isFirst ? Self.firstTaskDueDate() : nil
         let task = PlootTask(
-            title: composed,
+            title: title,
             dueDate: dueDate,
             projectId: project.id,
             section: section,
@@ -43,6 +42,38 @@ extension BreakdownSheet {
         }
         SyncService.shared.push(task: task)
         return task.id
+    }
+
+    // MARK: - Commit all (review mode)
+
+    /// Bulk-inserts every buffered `StreamedTask` into SwiftData, then
+    /// switches the sheet to `.finished`. Called from the "Start with
+    /// step 1" button in the review surface.
+    func commitAllTasks() {
+        // Re-number orders based on the user's potentially-reordered list.
+        for (index, _) in streamedTasks.enumerated() {
+            streamedTasks[index].order = index
+        }
+
+        for streamed in streamedTasks {
+            let taskId = insertTask(
+                title: streamed.title,
+                order: streamed.order
+            )
+            // Back-fill the taskId so subsequent UI interactions (e.g.
+            // the user still sees the list) can reference the real row.
+            if let idx = streamedTasks.firstIndex(where: { $0.id == streamed.id }) {
+                streamedTasks[idx].taskId = taskId
+            }
+        }
+
+        closeSheet()
+
+        // Apply timeline after commit so tasks have real SwiftData rows
+        // that applyTimeline can fetch and re-stamp.
+        if timelineMode != .drip {
+            applyTimeline(timelineMode)
+        }
     }
 
     /// Due date for the first task in a breakdown. Always strictly in the
@@ -143,7 +174,7 @@ extension BreakdownSheet {
     }
 
     private func fetchStreamedTask(_ streamed: StreamedTask) -> PlootTask? {
-        let taskId = streamed.taskId
+        guard let taskId = streamed.taskId else { return nil }
         let descriptor = FetchDescriptor<PlootTask>(
             predicate: #Predicate { $0.id == taskId }
         )
@@ -212,19 +243,40 @@ extension BreakdownSheet {
     }
 
     func removeStreamedTask(_ streamed: StreamedTask) {
-        // Soft-delete the real row so sync knows it's gone and the project
-        // stops showing it. Then drop it from the sheet with a spring.
-        let taskId = streamed.taskId
-        let descriptor = FetchDescriptor<PlootTask>(
-            predicate: #Predicate { $0.id == taskId }
-        )
-        if let task = try? modelContext.fetch(descriptor).first {
-            task.softDelete()
-            try? modelContext.save()
+        // Soft-delete the real row (if it exists) so sync knows it's gone
+        // and the project stops showing it. In review mode, taskId is nil
+        // so there's nothing to delete from SwiftData.
+        if let taskId = streamed.taskId {
+            let descriptor = FetchDescriptor<PlootTask>(
+                predicate: #Predicate { $0.id == taskId }
+            )
+            if let task = try? modelContext.fetch(descriptor).first {
+                task.softDelete()
+                try? modelContext.save()
+            }
         }
         withAnimation(Motion.spring) {
             streamedTasks.removeAll { $0.id == streamed.id }
             completedCount = max(0, completedCount - 1)
+        }
+    }
+
+    /// Handles drag-to-reorder. Moves tasks within the `streamedTasks`
+    /// array and re-numbers their `order` field.
+    func moveStreamedTasks(from source: IndexSet, to destination: Int) {
+        withAnimation(Motion.spring) {
+            streamedTasks.move(fromOffsets: source, toOffset: destination)
+            for (index, _) in streamedTasks.enumerated() {
+                streamedTasks[index].order = index
+            }
+        }
+    }
+
+    /// Handles swipe-to-delete from the native List.
+    func deleteStreamedTasks(at offsets: IndexSet) {
+        let tasksToRemove = offsets.map { streamedTasks[$0] }
+        for task in tasksToRemove {
+            removeStreamedTask(task)
         }
     }
 

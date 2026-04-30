@@ -56,27 +56,152 @@ extension BreakdownSheet {
 
     var streamedTaskList: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            ForEach(streamedTasks) { task in
-                SwipeToReveal {
-                    streamedRow(task)
-                } onDelete: {
-                    removeStreamedTask(task)
-                }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .leading).combined(with: .opacity),
-                    removal: .move(edge: .trailing).combined(with: .opacity)
-                ))
-            }
-            if case .streamingTasks = phase {
-                thinkingShimmer
-                    .padding(.top, Spacing.s1)
-            }
-            if case .finished = phase {
-                timelinePicker
+            if case .reviewing = phase {
+                // Review mode: reorderable list
+                reviewableList
+                reviewFooter
                     .padding(.top, Spacing.s3)
-                completionChip
-                    .padding(.top, Spacing.s2)
+            } else {
+                // Legacy / streaming mode: non-reorderable
+                ForEach(streamedTasks) { task in
+                    SwipeToReveal {
+                        streamedRow(task)
+                    } onDelete: {
+                        removeStreamedTask(task)
+                    }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
+                }
+                if case .streamingTasks = phase {
+                    thinkingShimmer
+                        .padding(.top, Spacing.s1)
+                }
+                if case .finished = phase {
+                    timelinePicker
+                        .padding(.top, Spacing.s3)
+                    completionChip
+                        .padding(.top, Spacing.s2)
+                }
             }
+        }
+    }
+
+    // MARK: - Reviewable list (drag-to-reorder)
+
+    @ViewBuilder
+    var reviewableList: some View {
+        ForEach(Array(streamedTasks.enumerated()), id: \.element.id) { index, task in
+            reviewRow(task, index: index)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .padding(.bottom, Spacing.s2)
+        }
+        .onMove(perform: moveStreamedTasks)
+        .onDelete(perform: deleteStreamedTasks)
+    }
+
+    /// Review-mode row: tap title to inline-rename.
+    private func reviewRow(_ task: StreamedTask, index: Int) -> some View {
+        HStack(alignment: .center, spacing: Spacing.s2) {
+            if editingTaskIndex == index {
+                TextField("Step name", text: $editingText)
+                    .font(.geist(size: 15, weight: 500))
+                    .foregroundStyle(palette.fg1)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        let trimmed = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            streamedTasks[index].title = trimmed
+                        }
+                        editingTaskIndex = nil
+                    }
+            } else {
+                Text(task.title)
+                    .font(.geist(size: 15, weight: 500))
+                    .foregroundStyle(palette.fg1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onTapGesture {
+                        editingText = task.title
+                        editingTaskIndex = index
+                    }
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(palette.fg3)
+        }
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s3)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .fill(palette.bgElevated)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .strokeBorder(editingTaskIndex == index ? palette.primary : palette.borderInk, lineWidth: 2)
+        )
+        .stampedShadow(radius: Radius.md, offset: 2)
+    }
+
+    // MARK: - Review footer (commit / redo)
+
+    var reviewFooter: some View {
+        VStack(spacing: Spacing.s3) {
+            timelinePicker
+
+            // Task count
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.primary)
+                Text("\(streamedTasks.count) steps ready")
+                    .font(.geist(size: 13, weight: 500))
+                    .foregroundStyle(palette.fg2)
+            }
+
+            Text("Drag to reorder · tap to rename")
+                .font(.geist(size: 12, weight: 400))
+                .foregroundStyle(palette.fg3)
+
+            // Commit button
+            Button {
+                commitAllTasks()
+            } label: {
+                Text("Start with step 1")
+                    .font(.geist(size: 16, weight: 600))
+                    .foregroundStyle(palette.onPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                            .fill(palette.primary)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                            .strokeBorder(palette.borderInk, lineWidth: 2)
+                    )
+                    .stampedShadow(radius: Radius.lg, offset: 3)
+            }
+            .buttonStyle(.plain)
+
+            // Redo button
+            Button {
+                redoPlan()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("Try a different plan")
+                        .font(.geist(size: 14, weight: 500))
+                }
+                .foregroundStyle(palette.fg2)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -137,9 +262,6 @@ extension BreakdownSheet {
 
     func streamedRow(_ task: StreamedTask) -> some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
-            Text(task.emoji)
-                .font(.system(size: 20))
-                .frame(width: 32, height: 32)
             Text(task.title)
                 .font(.geist(size: 15, weight: 500))
                 .foregroundStyle(palette.fg1)
@@ -147,7 +269,7 @@ extension BreakdownSheet {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Spacing.s3)
-        .padding(.vertical, Spacing.s2)
+        .padding(.vertical, Spacing.s3)
         .background(
             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                 .fill(palette.bgElevated)
@@ -166,7 +288,9 @@ extension BreakdownSheet {
 
     var completionChip: some View {
         HStack(spacing: 6) {
-            Text("✨").font(.system(size: 14))
+            Image(systemName: "sparkles")
+                .font(.system(size: 12))
+                .foregroundStyle(palette.primary)
             Text("\(completedCount) ready. all set.")
                 .font(.geist(size: 13, weight: 500))
                 .foregroundStyle(palette.fg2)

@@ -7,7 +7,7 @@ import Foundation
 enum BreakdownEvent: Equatable {
     case heartbeat
     case question(text: String, choices: [String], allowCustom: Bool)
-    case task(order: Int, emoji: String, title: String)
+    case task(order: Int, title: String)
     case hint(kind: String)
     case split(projects: [String])
     case refused(reason: String)
@@ -34,10 +34,9 @@ enum BreakdownEvent: Equatable {
             return .question(text: text, choices: choices, allowCustom: allowCustom)
         case "task":
             let order = obj["order"] as? Int ?? 0
-            let emoji = obj["emoji"] as? String ?? ""
             let title = obj["title"] as? String ?? ""
-            guard !emoji.isEmpty, !title.isEmpty else { return nil }
-            return .task(order: order, emoji: emoji, title: title)
+            guard !title.isEmpty else { return nil }
+            return .task(order: order, title: title)
         case "hint":
             let kind = obj["kind"] as? String ?? "single_task"
             return .hint(kind: kind)

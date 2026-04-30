@@ -21,12 +21,20 @@ enum BreakdownService {
     /// anything.
     static func stream(
         title: String,
-        answers: [BreakdownAnswer] = []
+        answers: [BreakdownAnswer] = [],
+        bio: String? = nil,
+        projectContext: ProjectContext? = nil
     ) -> AsyncThrowingStream<BreakdownEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await run(title: title, answers: answers, continuation: continuation)
+                    try await run(
+                        title: title,
+                        answers: answers,
+                        bio: bio,
+                        projectContext: projectContext,
+                        continuation: continuation
+                    )
                 } catch is CancellationError {
                     continuation.finish(throwing: BreakdownError.cancelled)
                 } catch {
@@ -39,11 +47,17 @@ enum BreakdownService {
         }
     }
 
-    // MARK: - Private
+    struct ProjectContext: Encodable {
+        let completed_projects: [String]
+        let active_projects: [String]
+        let avg_tasks_per_project: Int
+    }
 
     private static func run(
         title: String,
         answers: [BreakdownAnswer],
+        bio: String?,
+        projectContext: ProjectContext?,
         continuation: AsyncThrowingStream<BreakdownEvent, Error>.Continuation
     ) async throws {
         let session = try await Supa.client.auth.session
@@ -64,11 +78,16 @@ enum BreakdownService {
             // `Settings → AI breakdown → Clarifying questions` pref —
             // 0 jumps straight to tasks, 5 is the upper bound.
             let max_questions: Int
+            let bio: String?
+            let project_context: ProjectContext?
         }
+
         request.httpBody = try JSONEncoder().encode(Body(
             title: title,
             answers: answers,
-            max_questions: UserPrefs.breakdownQuestions
+            max_questions: UserPrefs.breakdownQuestions,
+            bio: bio,
+            project_context: projectContext
         ))
 
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
