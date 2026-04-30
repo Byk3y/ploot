@@ -34,9 +34,7 @@ struct TabBar: View {
         HStack(spacing: 0) {
             ForEach(PlootTab.allCases, id: \.self) { tab in
                 TabItem(tab: tab, active: current == tab) {
-                    withAnimation(Motion.spring) {
-                        current = tab
-                    }
+                    current = tab
                 }
                 .frame(maxWidth: .infinity)
             }

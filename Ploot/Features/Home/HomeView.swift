@@ -61,7 +61,6 @@ struct HomeView: View {
                 .overlay(alignment: .bottomTrailing) { voiceCancelPillLayer }
                 .overlay(alignment: .bottom) { toastLayer }
                 .overlay(alignment: .bottom) { voiceHintLayer }
-                .animation(Motion.spring, value: tab)
                 .animation(Motion.spring, value: voicePhase)
                 .animation(Motion.spring, value: voiceToast)
                 .animation(Motion.spring, value: showVoiceHint)
