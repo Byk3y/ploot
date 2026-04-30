@@ -1,8 +1,15 @@
 import SwiftUI
 
-struct SectionHeader: View {
+struct SectionHeader<Trailing: View>: View {
     var title: String
     var count: Int? = nil
+    var trailing: Trailing
+
+    init(title: String, count: Int? = nil, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.count = count
+        self.trailing = trailing()
+    }
 
     @Environment(\.plootPalette) private var palette
 
@@ -26,11 +33,19 @@ struct SectionHeader: View {
             }
 
             Spacer(minLength: 0)
+
+            trailing
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s5)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette.bg)
+    }
+}
+
+extension SectionHeader where Trailing == EmptyView {
+    init(title: String, count: Int? = nil) {
+        self.init(title: title, count: count, trailing: { EmptyView() })
     }
 }
