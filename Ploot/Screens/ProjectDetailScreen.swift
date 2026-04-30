@@ -30,6 +30,9 @@ struct ProjectDetailScreen: View {
             },
             trailing: {
                 HStack(spacing: Spacing.s2) {
+                    if UserPrefs.useAIBreakdown {
+                        HeaderButton(systemImage: "sparkles") { breakingDown = true }
+                    }
                     HeaderButton(systemImage: "plus") { addingTask = true }
                     moreMenu
                 }
@@ -164,22 +167,23 @@ struct ProjectDetailScreen: View {
     private func taskList(tasks: [PlootTask]) -> some View {
         if tasks.isEmpty {
             VStack(spacing: Spacing.s4) {
-                // Hide the AI sparkle CTA entirely when the user has
-                // disabled AI breakdown in Settings — the entry point
-                // shouldn't be reachable if they've opted out.
-                if UserPrefs.useAIBreakdown {
-                    BreakdownGhostRow(onTap: { breakingDown = true })
-                        .padding(.horizontal, Spacing.s4)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                }
                 EmptyState(
                     systemImage: "tray",
                     title: "Nothing here yet.",
-                    subtitle: "Tap + up top to add a task — or let the sparkle do it."
-                )
+                    subtitle: UserPrefs.useAIBreakdown
+                        ? "Tap + up top to add a task — or let the sparkle do it."
+                        : "Tap + up top to add a task to this project."
+                ) {
+                    if UserPrefs.useAIBreakdown {
+                        Button {
+                            breakingDown = true
+                        } label: {
+                            Label("Break down project", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.plootPrimary)
+                        .padding(.top, Spacing.s2)
+                    }
+                }
             }
             .padding(.top, Spacing.s4)
         } else {
@@ -208,16 +212,6 @@ struct ProjectDetailScreen: View {
                     } header: {
                         SectionHeader(title: "Current step", count: 1)
                     }
-                }
-
-                if UserPrefs.useAIBreakdown {
-                    BreakdownGhostRow(
-                        title: "break down more",
-                        subtitle: "add another small batch when this plan needs help.",
-                        onTap: { breakingDown = true }
-                    )
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.bottom, Spacing.s4)
                 }
 
                 if !upcoming.isEmpty {
@@ -287,6 +281,13 @@ struct ProjectDetailScreen: View {
                 confirmingDelete = true
             } label: {
                 Label("Delete", systemImage: "trash")
+            }
+            if UserPrefs.useAIBreakdown {
+                Button {
+                    breakingDown = true
+                } label: {
+                    Label("Break down more", systemImage: "sparkles")
+                }
             }
         } label: {
             Image(systemName: "ellipsis")

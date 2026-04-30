@@ -47,6 +47,8 @@ struct SettingsScreen: View {
     @AppStorage(UserPrefs.Key.useAIBreakdown) var useAIBreakdown: Bool = true
     @AppStorage(UserPrefs.Key.defaultTimelineMode) var defaultTimelineMode: String = "drip"
     @AppStorage(UserPrefs.Key.breakdownQuestions) var breakdownQuestions: Int = 3
+    @AppStorage(UserPrefs.Key.reviewBeforeCommit) var reviewBeforeCommit: Bool = true
+    @AppStorage(UserPrefs.Key.bio) var bio: String = ""
 
     // Today
     @AppStorage(UserPrefs.Key.showOverdueSeparately) var showOverdueSeparately: Bool = true
@@ -71,6 +73,7 @@ struct SettingsScreen: View {
     @State var confirmingDeleteAccount: Bool = false
     @State var showingManageSubscriptions: Bool = false
     @State var showingShareSheet: Bool = false
+    @State var bioSyncTask: Task<Void, Never>? = nil
 
     @Bindable var subscription = SubscriptionManager.shared
 
@@ -400,7 +403,7 @@ struct SettingsScreen: View {
     var aiBreakdownSection: some View {
         SettingsGroup(
             header: "AI breakdown",
-            footer: "When you create a project, Ploot can use AI to break it into bite-sized tasks. Turn off for fully-manual mode."
+            footer: "Let Ploot use AI to break projects into bite-sized tasks. You can trigger this from any project header or when creating new projects."
         ) {
             SettingsRow(
                 icon: "sparkles",
@@ -442,6 +445,59 @@ struct SettingsScreen: View {
                 )
             }
             .buttonStyle(.plain)
+            .disabled(!useAIBreakdown)
+            .opacity(useAIBreakdown ? 1 : 0.4)
+
+            SettingsRow(
+                icon: "eye",
+                label: "Review plan before starting",
+                trailing: .toggle($reviewBeforeCommit)
+            )
+            .disabled(!useAIBreakdown)
+            .opacity(useAIBreakdown ? 1 : 0.4)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(palette.fg2)
+                        .frame(width: 28, height: 28)
+                    Text("About you")
+                        .font(.geist(size: 16, weight: 500))
+                        .foregroundStyle(palette.fg1)
+                }
+                Text("Ploot uses this to give you better project plans.")
+                    .font(.geist(size: 12, weight: 400))
+                    .foregroundStyle(palette.fg3)
+                TextField(
+                    "e.g., freelance designer working on client projects",
+                    text: $bio,
+                    axis: .vertical
+                )
+                .font(.geist(size: 14, weight: 400))
+                .foregroundStyle(palette.fg1)
+                .padding(10)
+                .lineLimit(2...4)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .fill(palette.bgSunken)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .strokeBorder(palette.border, lineWidth: 1.5)
+                )
+                .autocorrectionDisabled()
+                .onChange(of: bio) { _, newValue in
+                    bioSyncTask?.cancel()
+                    bioSyncTask = Task {
+                        try? await Task.sleep(for: .milliseconds(800))
+                        guard !Task.isCancelled else { return }
+                        try? await SyncService.shared.pushBio(newValue)
+                    }
+                }
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s2)
             .disabled(!useAIBreakdown)
             .opacity(useAIBreakdown ? 1 : 0.4)
         }

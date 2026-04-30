@@ -15,6 +15,29 @@ struct EmptyState<Action: View>: View {
     var title: String
     var subtitle: String? = nil
     @ViewBuilder var action: () -> Action
+    
+    init(
+        systemImage: String? = nil,
+        title: String,
+        subtitle: String? = nil,
+        @ViewBuilder action: @escaping () -> Action
+    ) {
+        self.systemImage = systemImage
+        self.mascotPose = Self.poseForSymbol(systemImage)
+        self.title = title
+        self.subtitle = subtitle
+        self.action = action
+    }
+    
+    private static func poseForSymbol(_ symbol: String?) -> PlootMascotView.Pose {
+        switch symbol {
+        case "flag.checkered":  return .named("PlootPointing")    // "All done!" — celebratory until PlootDone art lands
+        case "tray":            return .named("PlootConfused")    // "Nothing here"
+        case "calendar":        return .named("PlootPeeking")     // calendar empty — falls back until PlootResearch art lands
+        case "folder":          return .named("PlootConfused")    // empty project
+        default:                return .named("PlootConfused")
+        }
+    }
 
     @Environment(\.plootPalette) private var palette
 
@@ -69,13 +92,5 @@ extension EmptyState where Action == EmptyView {
         self.action = { EmptyView() }
     }
 
-    private static func poseForSymbol(_ symbol: String?) -> PlootMascotView.Pose {
-        switch symbol {
-        case "flag.checkered":  return .named("PlootPointing")    // "All done!" — celebratory until PlootDone art lands
-        case "tray":            return .named("PlootConfused")    // "Nothing here"
-        case "calendar":        return .named("PlootPeeking")     // calendar empty — falls back until PlootResearch art lands
-        case "folder":          return .named("PlootConfused")    // empty project
-        default:                return .named("PlootConfused")
-        }
-    }
+
 }

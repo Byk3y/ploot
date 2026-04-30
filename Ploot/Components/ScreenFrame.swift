@@ -128,9 +128,13 @@ struct HeaderButton: View {
     var action: () -> Void
 
     @Environment(\.plootPalette) private var palette
+    @State private var hapticTrigger: Bool = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            hapticTrigger.toggle()
+            action()
+        } label: {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(palette.fg1)
@@ -139,6 +143,6 @@ struct HeaderButton: View {
                 .overlay(Circle().strokeBorder(palette.borderInk, lineWidth: 2))
         }
         .buttonStyle(.plain)
-        .plootHaptic(.selection, trigger: false)
+        .plootHaptic(.impact(weight: .light), trigger: hapticTrigger)
     }
 }
