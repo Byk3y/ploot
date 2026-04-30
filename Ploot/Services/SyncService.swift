@@ -173,6 +173,19 @@ final class SyncService {
             .execute()
     }
 
+    /// Pushes the user's free-text bio to their profiles row. Called from
+    /// Settings → AI Breakdown → About you. Debounced at the call-site
+    /// (800ms) so rapid typing doesn't flood the network.
+    func pushBio(_ bio: String) async throws {
+        guard let userId = currentOwnerIdSync() else { return }
+        struct BioUpdate: Encodable { let bio: String }
+        try await client
+            .from("profiles")
+            .update(BioUpdate(bio: bio))
+            .eq("id", value: userId.uuidString)
+            .execute()
+    }
+
     /// Snapshot of the onboarding-derived columns on `public.profiles`.
     /// Returned by `fetchOnboardingProfile` so a returning user on a
     /// fresh install can hydrate their local `UserPrefs` without

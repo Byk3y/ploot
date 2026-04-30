@@ -179,7 +179,7 @@ struct TodayScreen: View {
         let isOnFire = state == .onFire
         HStack(alignment: .center, spacing: 6) {
             FireLottieView(isDimmed: !isOnFire)
-                .frame(width: 44, height: 44)
+                .frame(width: 56, height: 56)
             Text("\(count)")
                 .font(.fraunces(size: 28, weight: 600, opsz: 72, soft: 40))
                 .foregroundStyle(isOnFire ? palette.clay500 : palette.fg1)

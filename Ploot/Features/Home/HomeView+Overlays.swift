@@ -71,7 +71,9 @@ extension HomeView {
         if let message = voiceToast {
             Button(action: handleToastTap) {
                 HStack(spacing: 8) {
-                    Text("✨").font(.system(size: 14))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.primary)
                     Text(message)
                         .font(.geist(size: 13, weight: 500))
                         .foregroundStyle(palette.fg1)
