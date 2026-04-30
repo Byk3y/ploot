@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Floating action button — 60pt clay circle with the signature stamped shadow.
 ///
@@ -38,12 +39,6 @@ struct FAB: View {
             .gesture(TapGesture().onEnded { action() }.exclusively(before: composedGesture))
             .onChange(of: dragPhase, handlePhaseChange)
             .animation(Motion.springFast, value: dragPhase)
-            .plootHaptic(.impact(weight: .medium), trigger: dragPhase == .pressing) { old, new in
-                !old && new
-            }
-            .plootHaptic(.impact(weight: .light), trigger: dragPhase == .recording) { old, new in
-                !old && new
-            }
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel("Add task")
             .accessibilityHint(onLongPressStart != nil ? "Hold to dictate." : "")
@@ -126,6 +121,9 @@ struct FAB: View {
     private func handlePhaseChange(_ oldPhase: DragPhase, _ newPhase: DragPhase) {
         if newPhase == .recording && !wasRecording {
             wasRecording = true
+            if UserPrefs.hapticsEnabled {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
             onLongPressStart?()
         }
     }
