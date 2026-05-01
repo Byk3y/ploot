@@ -407,6 +407,7 @@ struct BreakdownSheet: View {
                     // Go to review — user must commit before tasks land in SwiftData.
                     withAnimation(Motion.spring) { phase = .reviewing }
                 } else {
+                    retireFocusedTaskAfterSuccessfulSplit()
                     withAnimation(Motion.spring) { phase = .finished }
                     // Apply the user's default timeline immediately so a
                     // pref of "this week" actually spreads the tasks

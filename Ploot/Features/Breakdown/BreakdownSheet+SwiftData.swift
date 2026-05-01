@@ -71,6 +71,7 @@ extension BreakdownSheet {
             }
         }
 
+        retireFocusedTaskAfterSuccessfulSplit()
         closeSheet()
 
         // Apply timeline after commit so tasks have real SwiftData rows
@@ -78,6 +79,16 @@ extension BreakdownSheet {
         if focusTask == nil && timelineMode != .drip {
             applyTimeline(timelineMode)
         }
+    }
+
+    /// A focused split should replace the large step, not sit beside it.
+    /// We only retire the original after new smaller steps were successfully
+    /// inserted, so a failed or cancelled stream never loses the user's work.
+    func retireFocusedTaskAfterSuccessfulSplit() {
+        guard let focusTask, focusTask.isLive, !streamedTasks.isEmpty else { return }
+        ReminderService.shared.cancel(for: focusTask)
+        focusTask.softDelete()
+        try? modelContext.save()
     }
 
     /// Due date for the first task in a breakdown. Always strictly in the
